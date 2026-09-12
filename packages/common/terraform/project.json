@@ -1,0 +1,134 @@
+{
+  "name": "@daily-report/terraform",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/common/terraform/src",
+  "metadata": {
+    "generator": "terraform#project",
+    "iac": "terraform"
+  },
+  "targets": {
+    "assemble": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        "@daily-report/api:assemble",
+        "@daily-report/api:operations",
+        "@daily-report/db:assemble",
+        "@daily-report/website:assemble"
+      ]
+    },
+    "build": {
+      "dependsOn": [
+        "format",
+        "checkov",
+        "test",
+        "@daily-report/api:build",
+        "@daily-report/api:operations",
+        "@daily-report/db:build",
+        "@daily-report/website:build"
+      ],
+      "outputs": []
+    },
+    "checkov": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "outputs": ["{workspaceRoot}/dist/{projectRoot}/checkov"],
+      "options": {
+        "command": "uvx --from checkov==3.3.16 checkov --config-file ../checkov.yml --directory . -o cli -o json --output-file-path console,../../../../dist/{projectRoot}/checkov/checkov_report.json",
+        "forwardAllArgs": true,
+        "cwd": "{projectRoot}/src"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default"],
+      "options": {
+        "command": "terraform fmt -check -diff",
+        "forwardAllArgs": true,
+        "cwd": "{projectRoot}/src"
+      },
+      "configurations": {
+        "fix": {
+          "command": "terraform fmt"
+        },
+        "skip-lint": {
+          "command": "node -e \"\""
+        }
+      }
+    },
+    "init": {
+      "executor": "nx:run-commands",
+      "defaultConfiguration": "dev",
+      "options": {
+        "forwardAllArgs": true,
+        "cwd": "{projectRoot}/src",
+        "parallel": false,
+        "env": {
+          "TF_PLUGIN_CACHE_DIR": "../../../../.terraform/plugin-cache/{projectRoot}"
+        }
+      },
+      "configurations": {
+        "dev": {
+          "commands": [
+            {
+              "command": "shx mkdir -p ../../../../.terraform/plugin-cache/{projectRoot}",
+              "forwardAllArgs": false
+            },
+            "terraform init"
+          ]
+        }
+      }
+    },
+    "lint": {
+      "dependsOn": ["format"]
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "outputs": [],
+      "options": {
+        "commands": [
+          {
+            "command": "shx mkdir -p ../../../../.terraform/plugin-cache/{projectRoot}",
+            "forwardAllArgs": false
+          },
+          "terraform init -backend=false",
+          "terraform test"
+        ],
+        "forwardAllArgs": true,
+        "cwd": "{projectRoot}/src",
+        "parallel": false,
+        "env": {
+          "TF_DATA_DIR": "../../../../dist/{projectRoot}/terraform-test",
+          "TF_PLUGIN_CACHE_DIR": "../../../../.terraform/plugin-cache/{projectRoot}"
+        }
+      }
+    },
+    "validate": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^production"],
+      "outputs": [],
+      "options": {
+        "commands": [
+          {
+            "command": "shx mkdir -p ../../../../.terraform/plugin-cache/{projectRoot}",
+            "forwardAllArgs": false
+          },
+          "terraform init -backend=false",
+          "terraform validate"
+        ],
+        "forwardAllArgs": true,
+        "cwd": "{projectRoot}/src",
+        "parallel": false,
+        "env": {
+          "TF_DATA_DIR": "../../../../dist/{projectRoot}/terraform-validate",
+          "TF_PLUGIN_CACHE_DIR": "../../../../.terraform/plugin-cache/{projectRoot}"
+        }
+      }
+    }
+  }
+}

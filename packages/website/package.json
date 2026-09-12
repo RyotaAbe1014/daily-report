@@ -1,0 +1,28 @@
+{
+  "name": "@daily-report/website",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cloudscape-design/board-components": "catalog:",
+    "@cloudscape-design/components": "catalog:",
+    "@cloudscape-design/global-styles": "catalog:",
+    "@daily-report/api": "workspace:*",
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-query-devtools": "catalog:",
+    "@tanstack/react-router": "catalog:",
+    "@trpc/client": "catalog:",
+    "@trpc/tanstack-react-query": "catalog:",
+    "event-source-polyfill": "catalog:",
+    "oidc-client-ts": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-oidc-context": "catalog:",
+    "tailwindcss": "catalog:"
+  },
+  "devDependencies": {
+    "@smithy/types": "catalog:",
+    "@types/event-source-polyfill": "catalog:",
+    "@types/node": "catalog:"
+  }
+}
