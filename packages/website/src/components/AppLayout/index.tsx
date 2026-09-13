@@ -161,7 +161,10 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
             header={{ text: Config.applicationName, href: '/' }}
             activeHref={pathname}
             onFollow={onNavigate}
-            items={[{ text: 'Home', type: 'link', href: '/' }]}
+            items={[
+              { text: 'ホーム', type: 'link', href: '/' },
+              { text: '日報', type: 'link', href: '/reports' },
+            ]}
           />
         }
         toolsHide
