@@ -64,6 +64,18 @@
         "cwd": "{projectRoot}"
       }
     },
+    "test-integration": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "metadata": {
+        "technologies": ["vitest"],
+        "description": "Run integration tests against local DynamoDB (requires Docker)"
+      },
+      "options": {
+        "command": "vitest --config vitest.integration.config.mts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "dev": {
       "executor": "nx:run-commands",
       "dependsOn": ["pull-image"],
