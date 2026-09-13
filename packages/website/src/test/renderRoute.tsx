@@ -117,20 +117,24 @@ export const renderRoute = (
     path: routePath,
     component,
   });
-  // 遷移先としてだけ使う。描画内容は検証しない。
-  const listRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/reports',
-    component: () => <div>reports list</div>,
-  });
-  const editRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/reports/$date',
-    component: () => <div>edit</div>,
-  });
+
+  /**
+   * 遷移先として存在させるだけのルート。描画内容は検証しない。
+   * 検証対象と同じパスを二重に登録すると router が id の重複で落ちるため、
+   * 対象のパスは除いてから足す。
+   */
+  const destinations = ['/', '/reports', '/reports/$date']
+    .filter((path) => path !== routePath)
+    .map((path) =>
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path,
+        component: () => <div>{path}</div>,
+      }),
+    );
 
   const router = createRouter({
-    routeTree: rootRoute.addChildren([route, listRoute, editRoute]),
+    routeTree: rootRoute.addChildren([route, ...destinations]),
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   });
 
