@@ -127,14 +127,22 @@ function RouteComponent() {
             </Header>
           }
           empty={
-            <Box textAlign="center" padding="l">
-              <SpaceBetween size="s">
-                <Box variant="strong">まだ日報がありません</Box>
-                <Box variant="p" color="text-body-secondary">
-                  最初の日報を書いてみましょう。
-                </Box>
-              </SpaceBetween>
-            </Box>
+            // 取得に失敗したときは Alert を出しているので、ここで
+            // 「まだありません」と重ねると未作成だと誤解させる。
+            error ? (
+              <Box textAlign="center" padding="l" color="text-body-secondary">
+                日報を表示できませんでした
+              </Box>
+            ) : (
+              <Box textAlign="center" padding="l">
+                <SpaceBetween size="s">
+                  <Box variant="strong">まだ日報がありません</Box>
+                  <Box variant="p" color="text-body-secondary">
+                    最初の日報を書いてみましょう。
+                  </Box>
+                </SpaceBetween>
+              </Box>
+            )
           }
           pagination={
             <Pagination
