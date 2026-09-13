@@ -31,9 +31,10 @@ module "identity" {
   source = "./identity"
 
   user_pool_domain_prefix = "daily-report-website"
-  allow_signup = true
-  enable_waf = var.enable_waf
-  mfa = var.mfa
+  # 招待制: 管理者が作成したユーザーのみログイン可能（セルフサインアップを無効化）
+  allow_signup          = false
+  enable_waf            = var.enable_waf
+  mfa                   = var.mfa
   mfa_second_factor_otp = var.mfa_second_factor_otp
   mfa_second_factor_sms = var.mfa_second_factor_sms
 }
