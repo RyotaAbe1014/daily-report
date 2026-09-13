@@ -13,9 +13,9 @@ import {
 } from '../schema/index.js';
 
 /**
- * エンティティはテーブル名の解決に非同期の設定読み取りを伴うため、
- * 一度だけ作って使い回す。Lambda の実行環境が再利用される限り
- * AppConfig への問い合わせは初回のみになる。
+ * ElectroDB エンティティの初期化には AppConfig からのテーブル名解決（非同期処理）が必要なため、
+ * シングルトンとして生成して再利用します。
+ * Lambda 実行環境がウォームスタートする限り、設定の取得は初回呼び出し時のみ行われます。
  */
 let entityPromise: ReturnType<typeof createDailyReportEntity> | undefined;
 const getEntity = () => {
@@ -25,7 +25,7 @@ const getEntity = () => {
   return entityPromise;
 };
 
-/** DynamoDB の項目から API のレスポンス形へ変換する。userId は返さない。 */
+/** DynamoDB の項目から API のレスポンス形式へ変換するヘルパー関数。セキュリティのため内部フィールド（userId）は除外します。 */
 const toDailyReport = (item: {
   date: string;
   sections: { heading: string; body: string }[];
@@ -38,7 +38,7 @@ const toDailyReport = (item: {
   updatedAt: item.updatedAt,
 });
 
-/** ElectroDB のカーソルはそのまま不透明な文字列として往復させる。 */
+/** DynamoDB の条件付き書き込み失敗（ConditionalCheckFailed）を判定するヘルパー関数。 */
 const isConditionalCheckFailure = (error: unknown): boolean =>
   error instanceof Error &&
   /ConditionalCheckFailed|conditional request failed/i.test(
@@ -46,7 +46,7 @@ const isConditionalCheckFailure = (error: unknown): boolean =>
   );
 
 /**
- * 指定日の日報を取得する。存在しなければ report は null。
+ * 指定した日付の日報を取得します。該当する日報が存在しない場合は report に null を返却します。
  */
 export const getDailyReport = authenticatedProcedure
   .input(GetDailyReportInputSchema)
@@ -60,10 +60,10 @@ export const getDailyReport = authenticatedProcedure
   });
 
 /**
- * 日報を一覧する。日付の範囲指定とページングに対応する。
+ * 日報の一覧を取得します。日付範囲による絞り込みおよびカーソルページネーションに対応しています。
  *
- * from と to はいずれも省略でき、両方指定した場合のみ between を使う。
- * 片側だけの指定は gte / lte に落とす。
+ * `from` と `to` はいずれも任意指定です。両方指定された場合は between、
+ * 片側のみ指定された場合は gte / lte を用いて DynamoDB クエリを発行します。
  */
 export const listDailyReports = authenticatedProcedure
   .input(ListDailyReportsInputSchema)
@@ -101,10 +101,10 @@ export const listDailyReports = authenticatedProcedure
   });
 
 /**
- * 日報を新規作成する。同じ日付が既にある場合は CONFLICT。
+ * 日報を新規作成します。同一日付の日報がすでに存在する場合は CONFLICT エラーを返します。
  *
- * 一意性は userId と date の複合キーで保証されるため、
- * 事前に存在確認をしなくても競合を取りこぼさない。
+ * 一意性は userId と date の複合主キー（pk + sk）によって保証されるため、
+ * 事前の存在チェッククエリを行わずとも安全に重複作成を防止できます。
  */
 export const createDailyReport = authenticatedProcedure
   .input(SaveDailyReportInputSchema)
@@ -132,10 +132,10 @@ export const createDailyReport = authenticatedProcedure
   });
 
 /**
- * 既存の日報を更新する。存在しない日付なら NOT_FOUND。
+ * 既存の日報を更新します。指定日付の日報が存在しない場合は NOT_FOUND エラーを返します。
  *
- * patch は対象が存在することを条件に含めるため、
- * 取得してから書くのではなく 1 回の書き込みで済む。
+ * ElectroDB の patch 操作は対象項目が存在することを条件に更新を行うため、
+ * 事前に get で存在確認を行わずに 1 回の書き込みリクエストで完結します。
  */
 export const updateDailyReport = authenticatedProcedure
   .input(SaveDailyReportInputSchema)
@@ -160,7 +160,7 @@ export const updateDailyReport = authenticatedProcedure
   });
 
 /**
- * 日報を削除する。存在しない日付を指定しても成功扱いにする。
+ * 日報を削除します。指定日付の日報が存在しない場合も正常終了（成功扱い）とします（冪等性の担保）。
  */
 export const deleteDailyReport = authenticatedProcedure
   .input(DeleteDailyReportInputSchema)

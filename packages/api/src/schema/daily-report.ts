@@ -1,15 +1,14 @@
 import { z } from 'zod';
 
 /**
- * 日付は YYYY-MM-DD 固定。DynamoDB のソートキーになるため、
- * 辞書順と時系列順が一致することがこの形式に依存している。
+ * 日付は YYYY-MM-DD 形式に固定します。
+ * DynamoDB のソートキーとして利用するため、辞書順と時系列順が一致するこの形式が必須となります。
  */
 export const DateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be in YYYY-MM-DD format')
-  // Date.parse だけでは不十分。月の範囲外は NaN になるが、日の溢れは
-  // 翌月へロールオーバーして通ってしまう（2026-02-30 -> 2026-03-02）。
-  // 正規化した結果が入力と一致することまで確かめる。
+  // Date.parse 単体では日の超過分が翌月にロールオーバーして受理されてしまうため（例: 2026-02-30 -> 2026-03-02）、
+  // パース後の ISO 文字列に再変換し、元の入力値と一致するかどうかで実在する日付かを厳密に判定します。
   .refine(
     (value) => {
       const parsed = Date.parse(`${value}T00:00:00Z`);
@@ -22,12 +21,12 @@ export const DateSchema = z
   );
 
 /**
- * セクション 1 件。body は Markdown をそのまま保持する。
- * サニタイズは表示側の責務なので、ここでは内容を書き換えない。
+ * 日報内の各セクション。Markdown 形式の文字列を保持します。
+ * サニタイズ（XSS 対策等）はフロントエンドの表示側で実施するため、ここでは内容を改変せずそのまま格納します。
  */
 export const SectionSchema = z.object({
   heading: z.string().min(1).max(200),
-  // DynamoDB の 1 項目 400KB 制限に対する余裕を見た上限。
+  // DynamoDB の 1 項目あたりのサイズ制限（400KB）を考慮し、余裕を持たせた上限値（100,000文字）。
   body: z.string().min(1).max(100_000),
 });
 
@@ -38,7 +37,7 @@ export const DailyReportSchema = z.object({
   updatedAt: z.string(),
 });
 
-/** 作成・更新の入力。userId は含めない。認証コンテキストから取る。 */
+/** 日報の作成・更新時の入力スキーマ。セキュリティの観点から userId は含めず、認証コンテキストから取得します。 */
 export const SaveDailyReportInputSchema = z.object({
   date: DateSchema,
   sections: z.array(SectionSchema).min(1).max(20),
@@ -53,13 +52,13 @@ export const GetDailyReportOutputSchema = z.object({
 });
 
 export const ListDailyReportsInputSchema = z.object({
-  /** 範囲の下限。省略時は上限までの全期間。 */
+  /** 取得範囲の開始日（下限）。省略時は上限までの全期間を対象とします。 */
   from: DateSchema.optional(),
-  /** 範囲の上限。省略時は下限からの全期間。 */
+  /** 取得範囲の終了日（上限）。省略時は下限からの全期間を対象とします。 */
   to: DateSchema.optional(),
   limit: z.number().int().min(1).max(100).default(31),
   order: z.enum(['asc', 'desc']).default('desc'),
-  /** 前ページのレスポンスが返した cursor をそのまま渡す。 */
+  /** ページネーション用カーソル。前回のレスポンスで返却された cursor 値をそのまま渡します。 */
   cursor: z.string().nullish(),
 });
 

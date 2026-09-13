@@ -26,8 +26,8 @@ describe('DateSchema', () => {
     expect(DateSchema.safeParse(value).success).toBe(false);
   });
 
-  // 形式が合っていてもカレンダー上存在しない日付は通さない。
-  // ソートキーに使うため、往復しない値を入れたくない。
+  // フォーマットが YYYY-MM-DD に合致していても、カレンダー上に実在しない日付はバリデーションで弾く。
+  // DynamoDB のソートキーとして利用するため、不正な日付値の混入を防ぐ。
   it.each(['2026-13-01', '2026-00-10', '2026-01-00', '2026-01-32'])(
     'rejects the out-of-range date %s',
     (value) => {
@@ -35,8 +35,8 @@ describe('DateSchema', () => {
     },
   );
 
-  // Date.parse は日の溢れを翌月へロールオーバーして受理してしまう
-  // (2026-02-30 -> 2026-03-02)。正規化結果が入力と一致するかまで見ている。
+  // Date.parse は日の超過を翌月にロールオーバーして受理してしまうため（例: 2026-02-30 -> 2026-03-02）、
+  // 正規化後の値と入力値が完全一致するかどうかを検査していることを確認する。
   it.each([
     ['2026-02-30', '2026-03-02'],
     ['2025-02-29', '2025-03-01'],
@@ -46,7 +46,7 @@ describe('DateSchema', () => {
     expect(DateSchema.safeParse(value).success).toBe(false);
   });
 
-  // うるう年は受理する。ロールオーバー検査で誤って弾いてはいけない。
+  // うるう年の2月29日は正常に受理されることを確認（ロールオーバー検査による誤検知の防止）。
   it.each(['2024-02-29', '2000-02-29', '2028-02-29'])(
     'accepts the leap day %s',
     (value) => {
@@ -120,8 +120,8 @@ describe('SaveDailyReportInputSchema', () => {
     expect(SaveDailyReportInputSchema.safeParse(build(21)).success).toBe(false);
   });
 
-  // userId を入力から受け取ると他人の日報を指定できてしまうため、
-  // スキーマが余計なキーを落とすことを明示的に確かめる。
+  // 入力から userId を受け取ると他人の日報を操作できてしまう脆弱性につながるため、
+  // スキーマが余分なキーを自動的に除去（strip）することを明示的に検証する。
   it('strips a userId supplied by the caller', () => {
     const parsed = SaveDailyReportInputSchema.parse({
       date: '2026-09-13',
@@ -184,16 +184,16 @@ describe('ListDailyReportsInputSchema', () => {
     ).toBe(false);
   });
 
-  // カーソルは不透明な文字列として往復させるだけなので、
-  // null も undefined も「指定なし」として受け付ける。
+  // カーソルはクライアント側で解釈しない不透明な文字列として扱うため、
+  // null および undefined のいずれも「指定なし」として受け付ける。
   it.each([undefined, null])('accepts the cursor %s', (cursor) => {
     expect(ListDailyReportsInputSchema.safeParse({ cursor }).success).toBe(
       true,
     );
   });
 
-  // from > to の検証はスキーマではなくプロシージャ側の責務。
-  // ここで通ってしまうことを記録しておく。
+  // from > to の期間整合性チェックはスキーマ層ではなくプロシージャ側の責務。
+  // スキーマ単体ではこの指定が通過する仕様であることを記録・確認する。
   it('does not itself reject from later than to', () => {
     expect(
       ListDailyReportsInputSchema.safeParse({
@@ -205,9 +205,9 @@ describe('ListDailyReportsInputSchema', () => {
 });
 
 /**
- * 出力スキーマが userId を落としていることが、キー設計を外に漏らさない
- * 実質的な防御になっている。プロシージャ側で誤って userId を混ぜても
- * ここで落ちるので、その前提をスキーマの単体テストとして固定する。
+ * 出力スキーマによって userId などの内部フィールドが除去される仕様のテスト。
+ * DynamoDB のキー設計が外部に漏洩するのを防ぐ多層防御として機能している。
+ * プロシージャ層で誤って内部データを含めてしまってもスキーマで除去される前提を単体テストで固定する。
  */
 describe('output schemas strip internal fields', () => {
   const withUserId = {
@@ -249,8 +249,8 @@ describe('output schemas strip internal fields', () => {
     }
   });
 
-  // セクション内の余計なキーも落とす。DynamoDB の項目に将来
-  // 内部用の属性が増えても、そのまま外へ出ていかない。
+  // セクション内に含まれる不要なキーも除去する。
+  // DynamoDB の項目に将来的に内部用属性が追加されても、レスポンスに漏洩しないことを確認する。
   it('drops unknown keys inside sections', () => {
     const parsed = DailyReportSchema.parse({
       ...withUserId,

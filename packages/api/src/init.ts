@@ -22,11 +22,10 @@ export const publicProcedure = t.procedure
   .concat(createErrorPlugin());
 
 /**
- * 認証を必須とするプロシージャ。
+ * 認証を必須とするプロシージャ定義。
  *
- * ctx.userId が string として確定するため、各プロシージャは入力から
- * userId を受け取ってはならない。入力に userId を含めると、他人の ID を
- * 指定して他人の日報を読み書きできてしまう。
+ * ミドルウェアによって ctx.userId が確定するため、各プロシージャの入力スキーマで
+ * クライアントから userId を受け取らないようにしてください（なりすましによる他人の日報アクセスを防ぐため）。
  */
 export const authenticatedProcedure = publicProcedure.concat(
   createAuthPlugin(),

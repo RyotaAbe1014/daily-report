@@ -14,8 +14,8 @@ import type { ReactNode } from 'react';
 import { ApiTRPCContext } from '../components/ApiClientProvider';
 
 /**
- * プロシージャ名（例: 'dailyReport.get'）から、そのプロシージャが返す値を
- * 決める関数への対応。値を返せば解決、throw すれば失敗として扱われる。
+ * プロシージャ名（例: 'dailyReport.get'）と、その返却値を解決する関数とのマッピング。
+ * 値を返せば成功（resolve）、例外を throw すれば失敗（reject）として処理されます。
  */
 export type ProcedureHandlers = Record<
   string,
@@ -23,17 +23,17 @@ export type ProcedureHandlers = Record<
 >;
 
 /**
- * handlers を引くだけの tRPC リンク。
+ * 指定した handlers の結果を返すモック用 tRPC リンク。
  *
- * 本物の createTRPCClient をそのまま使い、一番下のリンクだけ差し替える。
- * クライアント内部の実装に触れないので、tRPC 側の都合で壊れにくい。
+ * 公式の createTRPCClient をそのまま使い、末端のリンク層のみを差し替えます。
+ * クライアントの内部実装に依存しないため、tRPC のバージョンアップ等による影響を受けにくい設計です。
  */
 const stubLink =
   (handlers: ProcedureHandlers): TRPCLink<AppRouter> =>
   () =>
   ({ op }) => {
-    // tRPC のリンクは observable を返す約束。購読されたら 1 回値を流して
-    // 完了する、という最小の実装で足りる。
+    // tRPC のリンク仕様に従い observable を返します。
+    // テスト用途のため、購読開始時に一度だけ値を流して完了（complete）する最小構成としています。
     const subscribe = (observer: {
       next?: (value: unknown) => void;
       error?: (err: unknown) => void;
@@ -80,18 +80,18 @@ const stubLink =
   };
 
 /**
- * 1 つのルートコンポーネントを、API スタブと router を付けて描画する。
+ * 対象のルートコンポーネントを、モック API とルーターを設定した状態でレンダリングします。
  *
- * 画面は useApi() と useNavigate() に依存するため、素の render では動かない。
- * ここで最小の Provider 一式を組む。
+ * 画面コンポーネントは useApi() や useNavigate() に依存しているため、通常の render() では動作しません。
+ * ここで動作に必要な最小限の Provider 群を一括で設定します。
  */
 export const renderRoute = (
   component: () => ReactNode,
   options: {
     handlers?: ProcedureHandlers;
-    /** 初期表示する URL。ルートパラメータを使う画面で指定する。 */
+    /** 初期表示する URL。URL パラメータを必要とする画面などで指定します。 */
     initialPath?: string;
-    /** ルートのパス。$date のようなパラメータを含められる。 */
+    /** ルートの定義パス（例: '$date' などの動的パラメータを含むパス）。 */
     routePath?: string;
   } = {},
 ) => {
@@ -99,7 +99,7 @@ export const renderRoute = (
 
   const queryClient = new QueryClient({
     defaultOptions: {
-      // テストではリトライを待ちたくない。失敗は即座に error にする。
+      // テスト実行時の待機時間をなくすため、自動リトライを無効化し即座にエラーとします。
       queries: { retry: false },
       mutations: { retry: false },
     },
@@ -119,9 +119,9 @@ export const renderRoute = (
   });
 
   /**
-   * 遷移先として存在させるだけのルート。描画内容は検証しない。
-   * 検証対象と同じパスを二重に登録すると router が id の重複で落ちるため、
-   * 対象のパスは除いてから足す。
+   * 画面遷移の検証用にダミーとして登録しておく遷移先ルート一覧。
+   * テスト対象と同一パスを二重登録すると router が ID 重複エラーで停止するため、
+   * 対象のパスを除外した上で追加します。
    */
   const destinations = ['/', '/reports', '/reports/$date']
     .filter((path) => path !== routePath)
@@ -141,18 +141,18 @@ export const renderRoute = (
   render(
     <QueryClientProvider client={queryClient}>
       <ApiTRPCContext.Provider value={{ optionsProxy, client }}>
-        {/* router の型はルートツリーごとに異なるため、ここでは緩めて渡す */}
+        {/* router の型定義はルートツリーの構造に依存するため、ここでは柔軟に扱えるようキャストして渡します */}
         <RouterProvider router={router as never} />
       </ApiTRPCContext.Provider>
     </QueryClientProvider>,
   );
 
-  // render の戻り値は screen 経由で足りるので返さない。
-  // 返すと pretty-format の型が推論に混ざって名前解決できなくなる。
+  // レンダリング結果の要素は screen 経由で取得可能なため返却しません。
+  // （戻り値に含めると pretty-format の型推論の影響で名前解決エラーが発生することがあります）
   return { router, queryClient };
 };
 
-/** 解決を任意のタイミングまで遅らせるためのハンドラ。 */
+/** 任意のタイミングで非同期処理を完了または拒否させるためのユーティリティ。 */
 export const deferred = <T,>() => {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
