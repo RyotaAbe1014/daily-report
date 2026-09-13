@@ -1,8 +1,3 @@
-import { useAuth } from 'react-oidc-context';
-import * as React from 'react';
-import { createContext, useCallback, useEffect, useState } from 'react';
-import Config from '../../config';
-
 import {
   BreadcrumbGroup,
   BreadcrumbGroupProps,
@@ -13,10 +8,14 @@ import CloudscapeAppLayout, {
   AppLayoutProps,
 } from '@cloudscape-design/components/app-layout';
 import {
-  useMatchRoute,
   useLocation,
+  useMatchRoute,
   useNavigate,
 } from '@tanstack/react-router';
+import * as React from 'react';
+import { createContext, useCallback, useEffect, useState } from 'react';
+import { useAuth } from 'react-oidc-context';
+import Config from '../../config';
 
 const getBreadcrumbs = (
   matchRoute: ReturnType<typeof useMatchRoute>,
@@ -162,7 +161,10 @@ const AppLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
             header={{ text: Config.applicationName, href: '/' }}
             activeHref={pathname}
             onFollow={onNavigate}
-            items={[{ text: 'Home', type: 'link', href: '/' }]}
+            items={[
+              { text: 'ホーム', type: 'link', href: '/' },
+              { text: '日報', type: 'link', href: '/reports' },
+            ]}
           />
         }
         toolsHide

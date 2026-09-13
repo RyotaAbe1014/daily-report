@@ -1,15 +1,15 @@
-import ApiClientProvider from './components/ApiClientProvider';
-import QueryClientProvider from './components/QueryClientProvider';
-import { useAuth } from 'react-oidc-context';
-import CognitoAuth from './components/CognitoAuth';
-import { useRuntimeConfig } from './hooks/useRuntimeConfig';
-import RuntimeConfigProvider from './components/RuntimeConfig';
-import React from 'react';
-import { createRoot } from 'react-dom/client';
 import { I18nProvider } from '@cloudscape-design/components/i18n';
 import messages from '@cloudscape-design/components/i18n/messages/all.en';
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { useAuth } from 'react-oidc-context';
+import ApiClientProvider from './components/ApiClientProvider';
+import CognitoAuth from './components/CognitoAuth';
+import QueryClientProvider from './components/QueryClientProvider';
+import RuntimeConfigProvider from './components/RuntimeConfig';
+import { useRuntimeConfig } from './hooks/useRuntimeConfig';
 import '@cloudscape-design/global-styles/index.css';
-import { RouterProvider, createRouter } from '@tanstack/react-router';
+import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { routeTree } from './routeTree.gen';
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
