@@ -5,6 +5,7 @@ import {
   ContentLayout,
   Header,
   SpaceBetween,
+  StatusIndicator,
 } from '@cloudscape-design/components';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
@@ -20,7 +21,9 @@ function RouteComponent() {
   const today = new Date().toISOString().slice(0, 10);
 
   // 今日の日報が既にあるかで、導線の文言と遷移先を変える。
-  const { data } = useQuery(api.dailyReport.get.queryOptions({ date: today }));
+  const { data, isLoading } = useQuery(
+    api.dailyReport.get.queryOptions({ date: today }),
+  );
   const todayReport = data?.report ?? null;
 
   return (
@@ -36,8 +39,13 @@ function RouteComponent() {
           header={<Header variant="h2">今日の日報</Header>}
           footer={
             <SpaceBetween direction="horizontal" size="xs">
+              {/*
+                ラベルが「書く」か「編集」かは取得結果で決まるので、
+                確定するまでは押させない。誤ったラベルを見せないため。
+              */}
               <Button
                 variant="primary"
+                disabled={isLoading}
                 onClick={() =>
                   navigate({ to: '/reports/$date', params: { date: today } })
                 }
@@ -52,7 +60,13 @@ function RouteComponent() {
         >
           <SpaceBetween size="s">
             <Box variant="awsui-key-label">{today}</Box>
-            {todayReport ? (
+            {/*
+              取得中に「まだ書かれていません」を出すと、実際には存在する
+              日報を未作成だと誤解させる。確定するまでは状態を断定しない。
+            */}
+            {isLoading ? (
+              <StatusIndicator type="loading">読み込み中</StatusIndicator>
+            ) : todayReport ? (
               <Box variant="p">
                 {todayReport.sections.length} 件のセクションが記録されています。
               </Box>
