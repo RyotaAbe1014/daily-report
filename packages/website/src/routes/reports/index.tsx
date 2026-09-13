@@ -60,86 +60,92 @@ function RouteComponent() {
         </Alert>
       ) : null}
 
-      <Table
-        // full-page はモバイル幅のときヘッダーとフッターの両方に
-        // ページネーションを複製する。操作は上の 1 つに絞りたいので container を使う。
-        variant="container"
-        loading={isLoading}
-        loadingText="読み込み中"
-        items={reports}
-        columnDefinitions={[
-          {
-            id: 'date',
-            header: '日付',
-            width: 160,
-            cell: (item) => (
-              <Button
-                variant="inline-link"
-                onClick={() =>
-                  navigate({
-                    to: '/reports/$date',
-                    params: { date: item.date },
-                  })
-                }
-              >
-                {item.date}
-              </Button>
-            ),
-          },
-          {
-            id: 'sections',
-            header: 'セクション',
-            width: 130,
-            cell: (item) => `${item.sections.length} 件`,
-          },
-          {
-            id: 'updatedAt',
-            header: '更新',
-            cell: (item) => new Date(item.updatedAt).toLocaleString('ja-JP'),
-          },
-        ]}
-        header={
-          <Header
-            variant="h1"
-            counter={reports.length > 0 ? `(${reports.length})` : undefined}
-            description="日付ごとに 1 件の日報を記録します"
-            actions={
-              <Button
-                variant="primary"
-                onClick={() =>
-                  navigate({
-                    to: '/reports/$date',
-                    // 既定は今日。日付は編集画面で変更できる。
-                    params: { date: new Date().toISOString().slice(0, 10) },
-                  })
-                }
-              >
-                日報を書く
-              </Button>
-            }
-          >
-            日報
-          </Header>
-        }
-        empty={
-          <Box textAlign="center" padding="l">
-            <SpaceBetween size="s">
-              <Box variant="strong">まだ日報がありません</Box>
-              <Box variant="p" color="text-body-secondary">
-                最初の日報を書いてみましょう。
-              </Box>
-            </SpaceBetween>
-          </Box>
-        }
-        pagination={
-          <Pagination
-            currentPageIndex={pageIndex + 1}
-            pagesCount={pagesCount}
-            openEnd={nextCursor !== null}
-            onChange={({ detail }) => goToPage(detail.currentPageIndex - 1)}
-          />
-        }
-      />
+      {/*
+        Table は行を親の左右いっぱいに広げるため、そのままだと日付の左端が
+        ヘッダーより外側に出る。styles.css で内側に寄せて列を揃える。
+      */}
+      <div className="table-aligned-with-header">
+        <Table
+          // full-page はモバイル幅のときヘッダーとフッターの両方に
+          // ページネーションを複製する。操作は上の 1 つに絞りたいので container を使う。
+          variant="container"
+          loading={isLoading}
+          loadingText="読み込み中"
+          items={reports}
+          columnDefinitions={[
+            {
+              id: 'date',
+              header: '日付',
+              width: 160,
+              cell: (item) => (
+                <Button
+                  variant="inline-link"
+                  onClick={() =>
+                    navigate({
+                      to: '/reports/$date',
+                      params: { date: item.date },
+                    })
+                  }
+                >
+                  {item.date}
+                </Button>
+              ),
+            },
+            {
+              id: 'sections',
+              header: 'セクション',
+              width: 130,
+              cell: (item) => `${item.sections.length} 件`,
+            },
+            {
+              id: 'updatedAt',
+              header: '更新',
+              cell: (item) => new Date(item.updatedAt).toLocaleString('ja-JP'),
+            },
+          ]}
+          header={
+            <Header
+              variant="h1"
+              counter={reports.length > 0 ? `(${reports.length})` : undefined}
+              description="日付ごとに 1 件の日報を記録します"
+              actions={
+                <Button
+                  variant="primary"
+                  onClick={() =>
+                    navigate({
+                      to: '/reports/$date',
+                      // 既定は今日。日付は編集画面で変更できる。
+                      params: { date: new Date().toISOString().slice(0, 10) },
+                    })
+                  }
+                >
+                  日報を書く
+                </Button>
+              }
+            >
+              日報
+            </Header>
+          }
+          empty={
+            <Box textAlign="center" padding="l">
+              <SpaceBetween size="s">
+                <Box variant="strong">まだ日報がありません</Box>
+                <Box variant="p" color="text-body-secondary">
+                  最初の日報を書いてみましょう。
+                </Box>
+              </SpaceBetween>
+            </Box>
+          }
+          pagination={
+            <Pagination
+              currentPageIndex={pageIndex + 1}
+              pagesCount={pagesCount}
+              openEnd={nextCursor !== null}
+              onChange={({ detail }) => goToPage(detail.currentPageIndex - 1)}
+            />
+          }
+        />
+      </div>
     </SpaceBetween>
   );
 }

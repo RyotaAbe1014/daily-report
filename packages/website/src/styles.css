@@ -1,2 +1,16 @@
 @import 'tailwindcss';
 /* You can add global styles to this file, and also import other style files */
+
+/*
+ * Cloudscape の Table は variant="container" のとき、行をコンテナの左右
+ * いっぱいに広げる。同じコンテナ内のヘッダー（タイトルと説明文）より
+ * 20px 外側に出るため、日付の列がヘッダーと揃わない。
+ *
+ * セル個別のパディングは :not(#\9) の詳細度ハック付きで指定されていて
+ * 上書きしづらいので、テーブルを内側に寄せて列の開始位置を合わせる。
+ * ずれ幅がビューポート幅によらず 20px 一定なことは実測で確認している。
+ */
+.table-aligned-with-header table {
+  inline-size: calc(100% - 40px);
+  margin-inline: 20px;
+}
