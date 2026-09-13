@@ -22,6 +22,8 @@
   },
   "devDependencies": {
     "@smithy/types": "catalog:",
+    "@testing-library/dom": "catalog:",
+    "@testing-library/react": "catalog:",
     "@types/event-source-polyfill": "catalog:",
     "@types/node": "catalog:"
   }

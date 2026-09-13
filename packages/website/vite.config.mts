@@ -20,6 +20,9 @@ export default defineConfig(() => ({
     tanstackRouter({
       routesDirectory: resolve(import.meta.dirname, 'src/routes'),
       generatedRouteTree: resolve(import.meta.dirname, 'src/routeTree.gen.ts'),
+      // ルート定義の隣にテストを置けるようにする。除外しないと
+      // Route を export しないファイルとして警告が出る。
+      routeFileIgnorePattern: '\\.(spec|test)\\.tsx?$',
     }),
     react(),
     tailwindcss(),
@@ -44,6 +47,13 @@ export default defineConfig(() => ({
     environment: 'jsdom',
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     reporters: ['default'],
+    // @testing-library/react はルートの devDependency なので、放っておくと
+    // website が解決する react とは別バージョンの react-dom を引き、
+    // フックが null を参照して落ちる。テスト実行時も単一の実体に揃える。
+    alias: {
+      react: resolve(import.meta.dirname, 'node_modules/react'),
+      'react-dom': resolve(import.meta.dirname, 'node_modules/react-dom'),
+    },
     coverage: {
       reportsDirectory:
         '../../dist/packages/website/test-output/vitest/coverage',
