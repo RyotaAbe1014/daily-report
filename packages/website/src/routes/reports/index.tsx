@@ -61,7 +61,9 @@ function RouteComponent() {
       ) : null}
 
       <Table
-        variant="full-page"
+        // full-page はモバイル幅のときヘッダーとフッターの両方に
+        // ページネーションを複製する。操作は上の 1 つに絞りたいので container を使う。
+        variant="container"
         loading={isLoading}
         loadingText="読み込み中"
         items={reports}
@@ -91,20 +93,14 @@ function RouteComponent() {
             cell: (item) => `${item.sections.length} 件`,
           },
           {
-            id: 'headings',
-            header: '見出し',
-            cell: (item) => item.sections.map((s) => s.heading).join(' / '),
-          },
-          {
             id: 'updatedAt',
             header: '更新',
-            width: 200,
             cell: (item) => new Date(item.updatedAt).toLocaleString('ja-JP'),
           },
         ]}
         header={
           <Header
-            variant="awsui-h1-sticky"
+            variant="h1"
             counter={reports.length > 0 ? `(${reports.length})` : undefined}
             description="日付ごとに 1 件の日報を記録します"
             actions={
