@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Header,
-  Pagination,
   SpaceBetween,
   Table,
 } from '@cloudscape-design/components';
@@ -26,6 +25,10 @@ function RouteComponent() {
   /**
    * カーソルはサーバーが返す不透明な文字列。前ページへ戻れるように
    * これまでに通過したカーソルを積んでおく。先頭ページは undefined。
+   *
+   * この履歴は「どこまで進んだか」でしかなく、総ページ数ではない。
+   * カーソル方式では全体の件数が分からないため、何ページあるかは
+   * 表示せず、前後に移動できるかどうかだけを見せる。
    */
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [pageIndex, setPageIndex] = useState(0);
@@ -41,15 +44,32 @@ function RouteComponent() {
   const reports = data?.reports ?? [];
   const nextCursor = data?.cursor ?? null;
 
-  /** 次ページがあるなら、その分だけページ番号を見せる。 */
-  const pagesCount = cursors.length + (nextCursor ? 1 : 0);
+  const hasPrevious = pageIndex > 0;
+  const hasNext = nextCursor !== null;
 
-  const goToPage = (nextPageIndex: number) => {
-    // 未訪問の次ページへ進むときだけカーソルを積む。
-    if (nextPageIndex === cursors.length && nextCursor) {
+  const goToNextPage = () => {
+    if (!nextCursor) {
+      return;
+    }
+    // 未訪問のページへ進むときだけカーソルを積む。
+    // 戻ってから進み直した場合は既に積んであるので触らない。
+    if (pageIndex + 1 === cursors.length) {
       setCursors([...cursors, nextCursor]);
     }
-    setPageIndex(nextPageIndex);
+    setPageIndex(pageIndex + 1);
+  };
+
+  const goToPreviousPage = () => {
+    if (!hasPrevious) {
+      return;
+    }
+    /*
+     * 進んだ先の履歴は捨てる。残しても使い道がないうえ、削除などで
+     * 件数が減ったあとは実体のない位置を指したままになる。
+     * 進み直すときはその時点の応答から改めてカーソルを積む。
+     */
+    setCursors(cursors.slice(0, pageIndex));
+    setPageIndex(pageIndex - 1);
   };
 
   return (
@@ -145,12 +165,25 @@ function RouteComponent() {
             )
           }
           pagination={
-            <Pagination
-              currentPageIndex={pageIndex + 1}
-              pagesCount={pagesCount}
-              openEnd={nextCursor !== null}
-              onChange={({ detail }) => goToPage(detail.currentPageIndex - 1)}
-            />
+            // ページ番号は出さない。カーソル方式では総件数が分からず、
+            // 訪問履歴を総ページ数として見せると、削除で件数が減った
+            // あとも実体のないページが残ってしまう。
+            hasPrevious || hasNext ? (
+              <SpaceBetween direction="horizontal" size="xs">
+                <Button
+                  iconName="angle-left"
+                  ariaLabel="前のページ"
+                  disabled={!hasPrevious || isLoading}
+                  onClick={goToPreviousPage}
+                />
+                <Button
+                  iconName="angle-right"
+                  ariaLabel="次のページ"
+                  disabled={!hasNext || isLoading}
+                  onClick={goToNextPage}
+                />
+              </SpaceBetween>
+            ) : undefined
           }
         />
       </div>

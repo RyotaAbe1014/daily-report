@@ -173,7 +173,7 @@ describe('一覧', () => {
       // 初回はカーソルなし。
       expect(calls[0]?.cursor).toBeUndefined();
 
-      fireEvent.click(screen.getByRole('button', { name: '2' }));
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
 
       await screen.findByText('2026-09-12');
       expect(calls.at(-1)?.cursor).toBe('cursor-1');
@@ -187,32 +187,17 @@ describe('一覧', () => {
       renderList({ 'dailyReport.list': handler });
 
       await screen.findByText('2026-09-13');
-      fireEvent.click(screen.getByRole('button', { name: '2' }));
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
       await screen.findByText('2026-09-12');
 
-      fireEvent.click(screen.getByRole('button', { name: '1' }));
+      fireEvent.click(screen.getByRole('button', { name: '前のページ' }));
 
       await screen.findByText('2026-09-13');
       // 先頭ページはカーソルを付けずに引き直す。
       expect(calls.at(-1)?.cursor).toBeUndefined();
     });
 
-    // 次ページの有無はページ番号の数で表れる。cursor が null なら
-    // 現在のページまでしか出さない。
-    it('最後のページでは次のページ番号を出さない', async () => {
-      renderList({
-        'dailyReport.list': () => ({
-          reports: [report('2026-09-13')],
-          cursor: null,
-        }),
-      });
-
-      await screen.findByText('2026-09-13');
-      expect(screen.getByRole('button', { name: '1' })).toBeDefined();
-      expect(screen.queryByRole('button', { name: '2' })).toBe(null);
-    });
-
-    it('次ページがあるうちは次のページ番号を出す', async () => {
+    it('先頭ページでは前へ戻れない', async () => {
       renderList({
         'dailyReport.list': () => ({
           reports: [report('2026-09-13')],
@@ -221,7 +206,142 @@ describe('一覧', () => {
       });
 
       await screen.findByText('2026-09-13');
-      expect(await screen.findByRole('button', { name: '2' })).toBeDefined();
+      expect(
+        (
+          screen.getByRole('button', {
+            name: '前のページ',
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+    });
+
+    it('最後のページでは次へ進めない', async () => {
+      const { handler } = pagedHandler([
+        { reports: [report('2026-09-13')], cursor: 'cursor-1' },
+        { reports: [report('2026-09-12')], cursor: null },
+      ]);
+      renderList({ 'dailyReport.list': handler });
+
+      await screen.findByText('2026-09-13');
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+      await screen.findByText('2026-09-12');
+
+      expect(
+        (
+          screen.getByRole('button', {
+            name: '次のページ',
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+    });
+
+    it('次ページがあるうちは次へ進める', async () => {
+      renderList({
+        'dailyReport.list': () => ({
+          reports: [report('2026-09-13')],
+          cursor: 'cursor-1',
+        }),
+      });
+
+      await screen.findByText('2026-09-13');
+      expect(
+        (
+          screen.getByRole('button', {
+            name: '次のページ',
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false);
+    });
+
+    // 1 ページに収まるなら移動する余地がないので操作自体を出さない。
+    it('1 ページに収まるときは移動の操作を出さない', async () => {
+      renderList({
+        'dailyReport.list': () => ({
+          reports: [report('2026-09-13')],
+          cursor: null,
+        }),
+      });
+
+      await screen.findByText('2026-09-13');
+      expect(screen.queryByRole('button', { name: '前のページ' })).toBe(null);
+    });
+
+    /*
+     * 戻ったあとに進み直すときは、その時点の応答が返したカーソルを
+     * 使う。古いカーソルを使い回すと、間の項目が消えていた場合に
+     * 実体のない位置を指してしまう。
+     */
+    it('戻ってから進み直すとカーソルを取り直す', async () => {
+      const calls: (string | null | undefined)[] = [];
+      let cursorForPage2 = 'cursor-old';
+      const handler = (input: unknown) => {
+        const { cursor } = input as { cursor?: string | null };
+        calls.push(cursor);
+        if (!cursor) {
+          return { reports: [report('2026-09-13')], cursor: cursorForPage2 };
+        }
+        return { reports: [report('2026-09-12')], cursor: null };
+      };
+      const { queryClient } = renderList({ 'dailyReport.list': handler });
+
+      await screen.findByText('2026-09-13');
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+      await screen.findByText('2026-09-12');
+      expect(calls.at(-1)).toBe('cursor-old');
+
+      fireEvent.click(screen.getByRole('button', { name: '前のページ' }));
+      await screen.findByText('2026-09-13');
+
+      // 間の項目が消え、先頭ページが返す次のカーソルが変わった状況。
+      cursorForPage2 = 'cursor-new';
+      await queryClient.invalidateQueries();
+      await waitFor(() => expect(calls.at(-1)).toBeUndefined());
+
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+
+      // 古い cursor-old ではなく、引き直した cursor-new を使う。
+      await waitFor(() => expect(calls.at(-1)).toBe('cursor-new'));
+    });
+
+    /*
+     * 実際に起きた不具合の再現。2 ページ目の最後の 1 件を消すと全体が
+     * 1 ページに収まるのに、訪問履歴を総ページ数として使っていたため
+     * 実体のないページへ進めてしまい、そこで「まだ日報がありません」と
+     * 表示されていた。
+     */
+    it('件数が減って 1 ページに収まったら次へ進めない', async () => {
+      let total = 11;
+      const handler = (input: unknown) => {
+        const { cursor } = input as { cursor?: string | null };
+        // 先頭ページは 10 件。11 件目があるときだけ次のカーソルを返す。
+        if (!cursor) {
+          return {
+            reports: Array.from({ length: Math.min(total, 10) }, (_, i) =>
+              report(`2026-09-${String(13 - i).padStart(2, '0')}`),
+            ),
+            cursor: total > 10 ? 'cursor-1' : null,
+          };
+        }
+        return { reports: [report('2026-09-02')], cursor: null };
+      };
+
+      const { queryClient } = renderList({ 'dailyReport.list': handler });
+
+      await screen.findByText('2026-09-13');
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+      await screen.findByText('2026-09-02');
+
+      // 2 ページ目の 1 件が消え、全体が 1 ページに収まる状況にする。
+      total = 10;
+      fireEvent.click(screen.getByRole('button', { name: '前のページ' }));
+      await screen.findByText('2026-09-13');
+      await queryClient.invalidateQueries();
+
+      // 1 ページに収まったので移動の操作ごと消える。修正前はここに
+      // 実体のない 2 ページ目が残っていた。
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: '次のページ' })).toBe(null),
+      );
     });
   });
 });
