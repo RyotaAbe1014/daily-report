@@ -25,7 +25,7 @@ export const Route = createFileRoute('/reports/$date')({
   component: RouteComponent,
 });
 
-/** サーバー側 SectionSchema と同じ上限。超過は保存前に弾く。 */
+/** サーバー側 SectionSchema と同等の上限値。バリデーションエラーを防ぐため保存前にチェックします。 */
 const MAX_SECTIONS = 20;
 const HEADING_MAX = 200;
 const BODY_MAX = 100_000;
@@ -46,15 +46,15 @@ function RouteComponent() {
     [],
   );
 
-  // 編集対象は URL の日付。フォームの date を変えても取得先は変えない
-  // （別日を開き直すのではなく、保存先の日付を変える操作にする）。
+  // 編集対象のデータ取得には URL パラメータの日付（routeDate）を使用します。
+  // フォーム内の日付入力を変更しても取得先は変えず、「保存先の日付を変更する」操作として扱います。
   const { data, isLoading, error } = useQuery(
     api.dailyReport.get.queryOptions({ date: routeDate }),
   );
 
   const existing = data?.report ?? null;
 
-  // 取得できたら既存の内容をフォームに流し込む。
+  // 取得完了時、既存の日報データをフォームの入力状態に反映します。
   useEffect(() => {
     if (existing) {
       setSections(existing.sections.map((s) => ({ ...s })));
@@ -108,7 +108,7 @@ function RouteComponent() {
   const isSaving =
     createReport.isPending || updateReport.isPending || deleteReport.isPending;
 
-  /** 保存できる状態か。サーバー側スキーマと同じ条件で判定する。 */
+  /** 入力内容が保存可能な状態かを判定します。サーバー側スキーマと同じバリデーション条件を適用しています。 */
   const validationMessage = (() => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return '日付を選んでください。';
@@ -134,7 +134,7 @@ function RouteComponent() {
       return;
     }
     const input = { date, sections };
-    // 同じ日付に既存があれば更新、なければ作成。
+    // 取得元と同じ日付であれば更新（update）、別の日付または新規作成時は作成（create）を実行します。
     if (existing && date === routeDate) {
       updateReport.mutate(input);
     } else {
@@ -230,7 +230,7 @@ function RouteComponent() {
               items={sections}
               addButtonText="セクションを追加"
               removeButtonText="削除"
-              // 1 件は必須なので、最後の 1 件は消させない。
+              // 最低 1 件のセクション入力が必須であるため、最後の 1 件は削除不可とします。
               isItemRemovable={() => sections.length > 1}
               onAddButtonClick={() =>
                 setSections([...sections, emptySection()])

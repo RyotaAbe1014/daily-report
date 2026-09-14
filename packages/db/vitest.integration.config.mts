@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
 /**
- * 統合テスト用の設定。DynamoDB Local (Docker) を必要とする。
- * `nx run @daily-report/db:test-integration` から使う。
+ * 統合テスト用の設定ファイルです。DynamoDB Local (Docker) の起動が必要です。
+ * 実行コマンド: `nx run @daily-report/db:test-integration`
  */
 export default defineConfig(() => ({
   root: import.meta.dirname,
@@ -14,7 +14,7 @@ export default defineConfig(() => ({
     globals: true,
     environment: 'node',
     include: ['{src,tests}/**/*.integration.spec.ts'],
-    // 同じテーブルの同じキーを触るため、ファイル間で並行させない。
+    // 同一テーブル内の同じキーを操作するテストが含まれるため、テストファイル間の並行実行を無効化しています。
     fileParallelism: false,
     reporters: ['default'],
   },

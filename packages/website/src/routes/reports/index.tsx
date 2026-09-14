@@ -16,7 +16,7 @@ export const Route = createFileRoute('/reports/')({
   component: RouteComponent,
 });
 
-/** 1 ページあたりの件数。サーバー側の既定は 31 だが一覧では短めにする。 */
+/** 1 ページあたりの表示件数。サーバー側のデフォルトは 31 件ですが、一覧画面では見やすさのため 10 件に設定しています。 */
 const PAGE_SIZE = 10;
 
 function RouteComponent() {
@@ -24,8 +24,8 @@ function RouteComponent() {
   const navigate = useNavigate();
 
   /**
-   * カーソルはサーバーが返す不透明な文字列。前ページへ戻れるように
-   * これまでに通過したカーソルを積んでおく。先頭ページは undefined。
+   * サーバーから返却されるページネーション用カーソル文字列の履歴。
+   * 前のページへ戻れるよう、通過したカーソルを配列で保持します（先頭ページは undefined）。
    */
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [pageIndex, setPageIndex] = useState(0);
@@ -41,11 +41,11 @@ function RouteComponent() {
   const reports = data?.reports ?? [];
   const nextCursor = data?.cursor ?? null;
 
-  /** 次ページがあるなら、その分だけページ番号を見せる。 */
+  /** 次ページが存在する場合、その分のページ番号を含めて表示件数を計算します。 */
   const pagesCount = cursors.length + (nextCursor ? 1 : 0);
 
   const goToPage = (nextPageIndex: number) => {
-    // 未訪問の次ページへ進むときだけカーソルを積む。
+    // 初めて訪れる次ページへ遷移する場合のみ、新しいカーソルを履歴に追加します。
     if (nextPageIndex === cursors.length && nextCursor) {
       setCursors([...cursors, nextCursor]);
     }
@@ -61,13 +61,13 @@ function RouteComponent() {
       ) : null}
 
       {/*
-        Table は行を親の左右いっぱいに広げるため、そのままだと日付の左端が
-        ヘッダーより外側に出る。styles.css で内側に寄せて列を揃える。
+        Table はデフォルトで行幅が親コンテナいっぱいまで広がり、日付列の左端が
+        ヘッダーからはみ出るため、styles.css でマージンを調整して列の開始位置を揃えています。
       */}
       <div className="table-aligned-with-header">
         <Table
-          // full-page はモバイル幅のときヘッダーとフッターの両方に
-          // ページネーションを複製する。操作は上の 1 つに絞りたいので container を使う。
+          // variant="full-page" にするとモバイル表示時に上下両方へページネーションが表示されてしまうため、
+          // 上部のみに絞る目的で "container" を指定しています。
           variant="container"
           loading={isLoading}
           loadingText="読み込み中"
@@ -114,7 +114,7 @@ function RouteComponent() {
                   onClick={() =>
                     navigate({
                       to: '/reports/$date',
-                      // 既定は今日。日付は編集画面で変更できる。
+                      // デフォルトは今日の日付。実際の日付は遷移後の編集画面でも変更可能です。
                       params: { date: new Date().toISOString().slice(0, 10) },
                     })
                   }
@@ -127,8 +127,8 @@ function RouteComponent() {
             </Header>
           }
           empty={
-            // 取得に失敗したときは Alert を出しているので、ここで
-            // 「まだありません」と重ねると未作成だと誤解させる。
+            // 取得エラー時は上部に Alert を表示しているため、
+            // ここで「まだ日報がありません」と表示すると未作成と誤認されるのを防ぐ
             error ? (
               <Box textAlign="center" padding="l" color="text-body-secondary">
                 日報を表示できませんでした

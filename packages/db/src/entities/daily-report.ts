@@ -2,17 +2,17 @@ import { Entity } from 'electrodb';
 import { getDynamoDBClient, resolveTableName } from '../client.js';
 
 /**
- * 日報エンティティ。
+ * 日報（DailyReport）の ElectroDB エンティティ定義。
  *
- * キー設計（シングルテーブル）:
- *   pk = $Db#user_<userId>          パーティションはユーザー単位
- *   sk = $dailyReport_1#date_<date> ソートは日付の降順・昇順スキャンに使う
+ * キー設計（シングルテーブルパターン）:
+ *   pk = $Db#user_<userId>          パーティションキー: ユーザー単位でデータを分離
+ *   sk = $dailyReport_1#date_<date> ソートキー: 日付による昇順・降順ソートおよび範囲取得に使用
  *
- * date は ISO 8601 の日付部分のみ（YYYY-MM-DD）。文字列の辞書順が
- * そのまま時系列順になるため、between で月次・週次の範囲取得ができる。
+ * date は ISO 8601 の日付部分（YYYY-MM-DD 形式）のみを保持します。
+ * 文字列の辞書順がそのまま時系列順と一致するため、between クエリを用いて月次や週次などの範囲取得が効率的に行えます。
  *
- * 個人利用のみを前提としているため GSI は使っていない。
- * 将来チーム共有を足す場合は gsi1（日付横断）を追加する。
+ * ※ 現状はユーザー個人の利用を前提としているため GSI は定義していません。
+ * 将来的にチーム共有などの機能を追加する際は、日付を軸にした横断検索用 GSI（gsi1 等）の追加を検討してください。
  */
 export const createDailyReportEntity = async () =>
   new Entity(
@@ -28,7 +28,7 @@ export const createDailyReportEntity = async () =>
           required: true,
           readOnly: true,
         },
-        /** YYYY-MM-DD 形式の対象日。ユーザーごとに一意。 */
+        /** YYYY-MM-DD 形式の日報対象日。ユーザーごとに一意（重複不可）。 */
         date: {
           type: 'string',
           required: true,
@@ -36,8 +36,8 @@ export const createDailyReportEntity = async () =>
           validate: /^\d{4}-\d{2}-\d{2}$/,
         },
         /**
-         * 自由記述のセクション配列。順序は配列のとおりに保持する。
-         * heading はユーザーが任意に決められるため固定の enum にはしない。
+         * 自由記述形式のセクション一覧。配列の順序をそのまま保持します。
+         * heading（見出し）はユーザーが自由に命名できる仕様とし、固定値（enum）にはしていません。
          */
         sections: {
           type: 'list',

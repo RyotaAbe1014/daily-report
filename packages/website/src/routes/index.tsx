@@ -20,7 +20,7 @@ function RouteComponent() {
   const navigate = useNavigate();
   const today = new Date().toISOString().slice(0, 10);
 
-  // 今日の日報が既にあるかで、導線の文言と遷移先を変える。
+  // 今日の日報がすでに作成されているかどうかに応じて、ボタンの文言を切り替えます。
   const { data, isLoading } = useQuery(
     api.dailyReport.get.queryOptions({ date: today }),
   );
@@ -40,8 +40,8 @@ function RouteComponent() {
           footer={
             <SpaceBetween direction="horizontal" size="xs">
               {/*
-                ラベルが「書く」か「編集」かは取得結果で決まるので、
-                確定するまでは押させない。誤ったラベルを見せないため。
+                ボタンのラベル（「今日の日報を書く」または「今日の日報を編集」）は取得結果に依存するため、
+                データ取得が完了するまではボタンを無効化（disabled）にして誤操作を防ぎます。
               */}
               <Button
                 variant="primary"
@@ -61,8 +61,8 @@ function RouteComponent() {
           <SpaceBetween size="s">
             <Box variant="awsui-key-label">{today}</Box>
             {/*
-              取得中に「まだ書かれていません」を出すと、実際には存在する
-              日報を未作成だと誤解させる。確定するまでは状態を断定しない。
+              読み込み完了前に「まだ書かれていません」を表示すると、実際には存在する日報を
+              未作成と誤認させてしまうため、データが確定するまではスピナーのみを表示します。
             */}
             {isLoading ? (
               <StatusIndicator type="loading">読み込み中</StatusIndicator>

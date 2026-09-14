@@ -1,19 +1,19 @@
 /**
- * 日報プロシージャの統合テスト。
+ * 日報プロシージャの結合テスト。
  *
- * ローカルの DynamoDB (Docker) に対して実際に読み書きする。
- * `nx run @daily-report/api:test-integration` で実行する。単体テストの
- * ターゲットには含めていないので、Docker がない環境では走らない。
+ * ローカルで起動した DynamoDB Local (Docker) に対して実際の読み書きを検証します。
+ * 実行コマンド: `nx run @daily-report/api:test-integration`
+ * ※ 通常の単体テストからは除外されているため、Docker が起動していない環境では実行されません。
  *
- * 認証は LOCAL_DEV の固定ユーザーに寄せているため、ここで検証するのは
- * プロシージャのふるまい（エラーコード、範囲指定、ページング）。
- * ユーザーごとの分離は db パッケージのエンティティ層で検証している。
+ * 認証は LOCAL_DEV の固定ユーザーに設定しているため、本テストでは
+ * プロシージャ層の振る舞い（エラーコード、日付範囲の絞り込み、ページネーション）を重点的に検証します。
+ * （※ ユーザー間のデータ分離については db パッケージ側のテストで検証済み）
  */
 import { TRPCError } from '@trpc/server';
 import { afterEach, describe, expect, it } from 'vitest';
 
-// import より先に評価される必要がある。エンティティ生成時に
-// テーブル名の解決でこの値を読むため。
+// import より先に環境変数が設定されている必要があります。
+// 後続のモジュール読み込み時にテーブル名等の解決でこの値を参照するためです。
 process.env.LOCAL_DEV = 'true';
 
 const { appRouter } = await import('../router.js');
@@ -26,22 +26,21 @@ const caller = appRouter.createCaller({
 
 const api = caller.dailyReport;
 
-/** このファイルが触る日付。各テストの後で必ず消す。 */
+/** 本テストファイルで作成・操作対象とする日付一覧。各テスト終了後に必ず削除してクリーンアップします。 */
 const dates = ['2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13'];
 
 const section = (heading: string, body = 'x') => ({ heading, body });
 
 /**
- * 日報オブジェクトが公開してよいキーだけを持つことを確かめる。
- * userId を落としているのは .output() の zod スキーマなので、
- * 各プロシージャの出力を通して回帰を検出する。
+ * 日報オブジェクトに外部公開を許可したキーのみが含まれていることを検証するヘルパー。
+ * 出力スキーマ（.output() の zod スキーマ）で userId が除外されていることを各プロシージャ経由で確認し、意図せぬ情報漏洩を防ぎます。
  */
 const PUBLIC_FIELDS = ['createdAt', 'date', 'sections', 'updatedAt'];
 const expectPublicShape = (report: unknown) => {
   expect(Object.keys(report ?? {}).sort()).toEqual(PUBLIC_FIELDS);
 };
 
-/** 投げられた TRPCError のコードを取り出す。 */
+/** 非同期処理でスローされた TRPCError のエラーコード（または結果）を取得するヘルパー。 */
 const codeOf = async (fn: () => Promise<unknown>) => {
   try {
     await fn();
@@ -75,7 +74,7 @@ describe('dailyReport.get', () => {
     expect(report?.sections).toEqual([section('今日やったこと', '実装した')]);
   });
 
-  // userId はレスポンスに含めない。漏れるとキー設計が外から見えてしまう。
+  // レスポンスに userId を含めない（内部のキー構造やアカウント識別子が外部に漏れるのを防ぐ）。
   it('returns exactly the public fields, never userId', async () => {
     await api.create({ date: '2026-09-13', sections: [section('a')] });
 
@@ -169,7 +168,7 @@ describe('dailyReport.delete', () => {
     });
   });
 
-  // 冪等。クライアントがリトライしても失敗させない。
+  // 冪等性（idempotence）の検証。同一日付の削除リトライ時にもエラーにならず正常終了することを確認する。
   it('succeeds for a date that does not exist', async () => {
     await expect(api.delete({ date: '2026-09-13' })).resolves.toEqual({
       date: '2026-09-13',
