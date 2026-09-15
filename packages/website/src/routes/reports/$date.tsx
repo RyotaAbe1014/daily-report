@@ -20,6 +20,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useApi } from '../../hooks/useApi';
+import { isValidDateString } from '../../lib/date';
+import { toErrorMessage } from '../../lib/errorMessage';
 
 export const Route = createFileRoute('/reports/$date')({
   component: RouteComponent,
@@ -40,6 +42,13 @@ function RouteComponent() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  /*
+   * URL の日付はユーザーが直接書き換えられる。実在しない日付のまま
+   * 進むと、DatePicker が近い日付に丸めてしまい、指定していない日に
+   * 書き込みかねない。サーバーと同じスキーマで先に弾く。
+   */
+  const isValidDate = isValidDateString(routeDate);
+
   const [date, setDate] = useState(routeDate);
   const [sections, setSections] = useState<Section[]>([emptySection()]);
   const [notifications, setNotifications] = useState<FlashbarProps['items']>(
@@ -48,9 +57,11 @@ function RouteComponent() {
 
   // 編集対象は URL の日付。フォームの date を変えても取得先は変えない
   // （別日を開き直すのではなく、保存先の日付を変える操作にする）。
-  const { data, isLoading, error } = useQuery(
-    api.dailyReport.get.queryOptions({ date: routeDate }),
-  );
+  const { data, isLoading, error } = useQuery({
+    ...api.dailyReport.get.queryOptions({ date: routeDate }),
+    // 弾いた日付でサーバーを叩いても 400 が返るだけなので問い合わせない。
+    enabled: isValidDate,
+  });
 
   const existing = data?.report ?? null;
 
@@ -84,7 +95,8 @@ function RouteComponent() {
       invalidate();
       navigate({ to: '/reports' });
     },
-    onError: (e) => notifyError('作成できませんでした', e.message),
+    onError: (e) =>
+      notifyError('作成できませんでした', toErrorMessage(e, 'create')),
   });
 
   const updateReport = useMutation({
@@ -93,7 +105,8 @@ function RouteComponent() {
       invalidate();
       navigate({ to: '/reports' });
     },
-    onError: (e) => notifyError('更新できませんでした', e.message),
+    onError: (e) =>
+      notifyError('更新できませんでした', toErrorMessage(e, 'update')),
   });
 
   const deleteReport = useMutation({
@@ -102,7 +115,8 @@ function RouteComponent() {
       invalidate();
       navigate({ to: '/reports' });
     },
-    onError: (e) => notifyError('削除できませんでした', e.message),
+    onError: (e) =>
+      notifyError('削除できませんでした', toErrorMessage(e, 'delete')),
   });
 
   const isSaving =
@@ -142,6 +156,24 @@ function RouteComponent() {
     }
   };
 
+  if (!isValidDate) {
+    return (
+      <ContentLayout header={<Header variant="h1">日報を開けません</Header>}>
+        <Alert
+          type="error"
+          header="日付が正しくありません"
+          action={
+            <Button onClick={() => navigate({ to: '/reports' })}>
+              一覧へ戻る
+            </Button>
+          }
+        >
+          「{routeDate}」は日付として扱えません。一覧から選び直してください。
+        </Alert>
+      </ContentLayout>
+    );
+  }
+
   if (isLoading) {
     return (
       <Box textAlign="center" padding="xxl">
@@ -178,7 +210,7 @@ function RouteComponent() {
     >
       {error ? (
         <Alert type="error" header="日報を取得できませんでした">
-          {error.message}
+          {toErrorMessage(error, 'load')}
         </Alert>
       ) : null}
 

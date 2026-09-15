@@ -319,6 +319,40 @@ describe('作成・編集', () => {
     });
   });
 
+  /*
+   * URL の日付はユーザーが直接書き換えられる。実在しない日付のまま進むと
+   * DatePicker が近い日に丸めてしまい、指定していない日に書き込みかねない。
+   */
+  describe('日付として扱えない URL', () => {
+    it.each(['2026-02-30', 'hello', '9999-99-99'])(
+      '%s ならフォームを出さずに知らせる',
+      async (bad) => {
+        const get = vi.fn().mockResolvedValue({ report: null });
+        renderEdit({ 'dailyReport.get': get }, bad);
+
+        expect(await screen.findByText('日付が正しくありません')).toBeDefined();
+        expect(screen.queryByRole('button', { name: '保存' })).toBe(null);
+        // 400 が返るだけなので問い合わせない。
+        expect(get).not.toHaveBeenCalled();
+      },
+    );
+
+    it('一覧へ戻れる', async () => {
+      const { router } = renderEdit(
+        { 'dailyReport.get': () => ({ report: null }) },
+        '2026-02-30',
+      );
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: '一覧へ戻る' }),
+      );
+
+      await waitFor(() =>
+        expect(router.state.location.pathname).toBe('/reports'),
+      );
+    });
+  });
+
   describe('取得中', () => {
     it('作成と編集のどちらか決まるまでフォームを出さない', async () => {
       const pending = deferred<{ report: null }>();
