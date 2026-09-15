@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useApi } from '../../hooks/useApi';
+import { toErrorMessage } from '../../lib/errorMessage';
 
 export const Route = createFileRoute('/reports/')({
   component: RouteComponent,
@@ -76,7 +77,7 @@ function RouteComponent() {
     <SpaceBetween size="l">
       {error ? (
         <Alert type="error" header="日報を取得できませんでした">
-          {error.message}
+          {toErrorMessage(error, 'load')}
         </Alert>
       ) : null}
 
