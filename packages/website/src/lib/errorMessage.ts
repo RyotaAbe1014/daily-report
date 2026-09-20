@@ -1,12 +1,13 @@
 /**
- * API のエラーを画面に出せる日本語にする。
+ * API のエラーを画面表示用の日本語メッセージへ変換します。
  *
- * tRPC は入力検証に失敗すると zod の結果を JSON 文字列のまま message に
- * 入れてくる。そのまま出すと配列や "code": "custom" が画面に並ぶので、
- * エラーコードから組み立て直す。
+ * tRPC は入力バリデーションに失敗すると、zod の検証結果を JSON 文字列の
+ * まま message に格納します。そのまま表示すると配列や "code": "custom"
+ * といった内部表現が画面に出てしまうため、エラーコードを基に文面を
+ * 組み立て直します。
  */
 
-/** tRPC が返すエラーコード。サーバー側のプロシージャが投げるもの。 */
+/** tRPC が返却するエラーコード。サーバー側のプロシージャが送出します。 */
 type ErrorCode =
   | 'BAD_REQUEST'
   | 'UNAUTHORIZED'
@@ -21,8 +22,9 @@ const codeOf = (error: unknown): ErrorCode | undefined =>
   (error as { data?: { code?: ErrorCode } })?.data?.code;
 
 /**
- * 操作の文脈ごとの文面。同じ CONFLICT でも、作成なら「既にある」、
- * 更新なら別の意味になるため、呼び出す側が文脈を渡す。
+ * 操作の文脈ごとのメッセージ定義。
+ * 同じ CONFLICT でも、作成時は「既に存在する」という意味になる一方、
+ * 更新時は別の意味を持つため、呼び出し側から文脈を指定する形にしています。
  */
 export type ErrorContext = 'load' | 'create' | 'update' | 'delete';
 
@@ -44,7 +46,7 @@ const MESSAGES: Record<ErrorContext, Partial<Record<ErrorCode, string>>> = {
   },
 };
 
-/** 文脈によらず同じ意味になるもの。 */
+/** 文脈によらず意味が変わらないエラーコード向けのメッセージ。 */
 const COMMON: Partial<Record<ErrorCode, string>> = {
   UNAUTHORIZED: 'ログインし直してください。',
   FORBIDDEN: 'この操作を行う権限がありません。',
@@ -56,8 +58,9 @@ const COMMON: Partial<Record<ErrorCode, string>> = {
 };
 
 /**
- * エラーを画面に出す 1 文にする。
- * 見当がつかない場合も、生のメッセージは見せずに定型文へ倒す。
+ * エラーを画面表示用の一文へ変換します。
+ * 該当するコードが判別できない場合も、生のメッセージは表示せず
+ * 定型文にフォールバックします。
  */
 export const toErrorMessage = (
   error: unknown,
@@ -65,7 +68,7 @@ export const toErrorMessage = (
 ): string => {
   const code = codeOf(error);
   if (!code) {
-    // ネットワーク断などでコードが付かないケース。
+    // ネットワーク断など、エラーコードが付与されないケースです。
     return '通信に失敗しました。接続を確認してもう一度お試しください。';
   }
   return (

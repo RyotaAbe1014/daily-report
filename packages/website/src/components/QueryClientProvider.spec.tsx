@@ -4,14 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { QueryClientProvider } from './QueryClientProvider';
 
 /**
- * 既定のリトライ方針のテスト。
+ * 既定のリトライ方針に関するテスト。
  *
- * 入力が不正で 400 が返る場面でも既定の 3 回リトライが働くと、画面には
- * 何も出ないまま数秒待たされたうえで同じ失敗に終わる。回復し得る失敗
- * だけ再試行することを固定する。
+ * 入力エラーで 400 が返る場面にも既定の 3 回リトライが適用されると、
+ * 画面に何も表示されないまま数秒待たされた末に同じ失敗に終わる。
+ * 回復の見込みがある失敗のみ再試行することを検証する。
  */
 
-/** tRPC のエラーを模した値。 */
+/** tRPC が返却するエラーを模した値。 */
 const errorWithStatus = (httpStatus: number) =>
   Object.assign(new Error('failed'), { data: { httpStatus } });
 
@@ -39,7 +39,7 @@ describe('既定のリトライ方針', () => {
     expect(fail).toHaveBeenCalledTimes(1);
   });
 
-  // 時間を置けば通る見込みがあるものは再試行する。
+  // 時間を置けば成功し得るステータスは再試行の対象とする。
   it.each([408, 429, 500, 503])('%i は投げ直す', async (status) => {
     const fail = vi.fn().mockRejectedValue(errorWithStatus(status));
     renderProbe(fail);

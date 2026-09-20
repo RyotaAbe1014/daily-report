@@ -27,7 +27,7 @@ export const Route = createFileRoute('/reports/$date')({
   component: RouteComponent,
 });
 
-/** サーバー側 SectionSchema と同じ上限。超過は保存前に弾く。 */
+/** サーバー側 SectionSchema と同等の上限値。保存前にチェックし、超過時は送信しません。 */
 const MAX_SECTIONS = 20;
 const HEADING_MAX = 200;
 const BODY_MAX = 100_000;
@@ -43,9 +43,10 @@ function RouteComponent() {
   const queryClient = useQueryClient();
 
   /*
-   * URL の日付はユーザーが直接書き換えられる。実在しない日付のまま
-   * 進むと、DatePicker が近い日付に丸めてしまい、指定していない日に
-   * 書き込みかねない。サーバーと同じスキーマで先に弾く。
+   * URL の日付はユーザーが直接書き換えられます。実在しない日付のまま
+   * 処理を進めると DatePicker が近い日付へ丸めてしまい、ユーザーが
+   * 指定していない日に書き込まれる恐れがあります。
+   * そのため、サーバーと同一の条件で事前に弾きます。
    */
   const isValidDate = isValidDateString(routeDate);
 
@@ -55,17 +56,17 @@ function RouteComponent() {
     [],
   );
 
-  // 編集対象は URL の日付。フォームの date を変えても取得先は変えない
-  // （別日を開き直すのではなく、保存先の日付を変える操作にする）。
+  // 編集対象のデータ取得には URL パラメータの日付を使用します。
+  // フォーム内の日付を変更しても取得先は変えず、「保存先の日付を変更する」操作として扱います。
   const { data, isLoading, error } = useQuery({
     ...api.dailyReport.get.queryOptions({ date: routeDate }),
-    // 弾いた日付でサーバーを叩いても 400 が返るだけなので問い合わせない。
+    // 事前に弾いた日付で問い合わせても 400 が返るだけのため、リクエストを送りません。
     enabled: isValidDate,
   });
 
   const existing = data?.report ?? null;
 
-  // 取得できたら既存の内容をフォームに流し込む。
+  // 取得完了時、既存の日報データをフォームの入力状態へ反映します。
   useEffect(() => {
     if (existing) {
       setSections(existing.sections.map((s) => ({ ...s })));
@@ -122,7 +123,7 @@ function RouteComponent() {
   const isSaving =
     createReport.isPending || updateReport.isPending || deleteReport.isPending;
 
-  /** 保存できる状態か。サーバー側スキーマと同じ条件で判定する。 */
+  /** 入力内容が保存可能な状態かを判定します。サーバー側スキーマと同じ条件を適用しています。 */
   const validationMessage = (() => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return '日付を選んでください。';
@@ -148,7 +149,7 @@ function RouteComponent() {
       return;
     }
     const input = { date, sections };
-    // 同じ日付に既存があれば更新、なければ作成。
+    // 取得元と同じ日付に既存データがあれば更新（update）、それ以外は作成（create）を実行します。
     if (existing && date === routeDate) {
       updateReport.mutate(input);
     } else {
@@ -262,7 +263,7 @@ function RouteComponent() {
               items={sections}
               addButtonText="セクションを追加"
               removeButtonText="削除"
-              // 1 件は必須なので、最後の 1 件は消させない。
+              // 最低 1 件のセクション入力が必須であるため、最後の 1 件は削除不可とします。
               isItemRemovable={() => sections.length > 1}
               onAddButtonClick={() =>
                 setSections([...sections, emptySection()])

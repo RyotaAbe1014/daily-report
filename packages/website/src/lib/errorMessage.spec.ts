@@ -6,8 +6,9 @@ const withCode = (code: string) => ({ data: { code } });
 
 describe('toErrorMessage', () => {
   /*
-   * tRPC は入力検証に失敗すると zod の結果を JSON 文字列のまま message に
-   * 入れてくる。これがそのまま画面に出ていたので、混入しないことを固定する。
+   * tRPC は入力バリデーションに失敗すると、zod の検証結果を JSON 文字列の
+   * まま message に格納する。これが画面にそのまま出ていたため、
+   * 内部表現が混入しないことを明示的に検証する。
    */
   it('does not leak the raw zod payload', () => {
     const error = {
@@ -64,7 +65,7 @@ describe('toErrorMessage', () => {
     expect(message).not.toContain('SOMETHING_NEW');
   });
 
-  // 文脈に用意がないコードは共通の文面へ落ちる。
+  // 文脈側に定義がないコードは、共通のメッセージにフォールバックする。
   it('文脈に定義がなければ共通の文面を使う', () => {
     expect(toErrorMessage(withCode('UNAUTHORIZED'), 'delete')).toContain(
       'ログイン',

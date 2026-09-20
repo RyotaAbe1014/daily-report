@@ -16,7 +16,7 @@ export const Route = createFileRoute('/reports/')({
   component: RouteComponent,
 });
 
-/** 1 ページあたりの件数。サーバー側の既定は 31 だが一覧では短めにする。 */
+/** 1 ページあたりの表示件数。サーバー側の既定値は 31 ですが、一覧画面では短めに設定します。 */
 const PAGE_SIZE = 10;
 
 function RouteComponent() {
@@ -24,12 +24,12 @@ function RouteComponent() {
   const navigate = useNavigate();
 
   /**
-   * カーソルはサーバーが返す不透明な文字列。前ページへ戻れるように
-   * これまでに通過したカーソルを積んでおく。先頭ページは undefined。
+   * サーバーから返却されるページネーション用カーソル文字列の履歴。
+   * 前のページへ戻れるよう、通過したカーソルを配列で保持します（先頭ページは undefined）。
    *
-   * この履歴は「どこまで進んだか」でしかなく、総ページ数ではない。
-   * カーソル方式では全体の件数が分からないため、何ページあるかは
-   * 表示せず、前後に移動できるかどうかだけを見せる。
+   * この履歴はあくまで「どこまで進んだか」を表すもので、総ページ数ではありません。
+   * カーソル方式では全体の件数を取得できないため、ページ数は表示せず、
+   * 前後へ移動できるかどうかのみを提示します。
    */
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [pageIndex, setPageIndex] = useState(0);
@@ -52,8 +52,8 @@ function RouteComponent() {
     if (!nextCursor) {
       return;
     }
-    // 未訪問のページへ進むときだけカーソルを積む。
-    // 戻ってから進み直した場合は既に積んであるので触らない。
+    // 初めて訪れるページへ遷移する場合のみ、新しいカーソルを履歴に追加します。
+    // 戻ってから進み直した場合は既に保持済みのため、履歴は変更しません。
     if (pageIndex + 1 === cursors.length) {
       setCursors([...cursors, nextCursor]);
     }
@@ -65,9 +65,9 @@ function RouteComponent() {
       return;
     }
     /*
-     * 進んだ先の履歴は捨てる。残しても使い道がないうえ、削除などで
-     * 件数が減ったあとは実体のない位置を指したままになる。
-     * 進み直すときはその時点の応答から改めてカーソルを積む。
+     * 進んだ先の履歴は破棄します。保持しても再利用の余地がないうえ、
+     * 削除などで件数が減った後は存在しない位置を指し続けてしまうためです。
+     * 進み直す際は、その時点のレスポンスから改めてカーソルを取得します。
      */
     setCursors(cursors.slice(0, pageIndex));
     setPageIndex(pageIndex - 1);
@@ -87,8 +87,8 @@ function RouteComponent() {
       */}
       <div className="table-aligned-with-header">
         <Table
-          // full-page はモバイル幅のときヘッダーとフッターの両方に
-          // ページネーションを複製する。操作は上の 1 つに絞りたいので container を使う。
+          // variant="full-page" はモバイル幅の場合、ヘッダーとフッターの双方に
+          // ページネーションを複製します。操作を上部の 1 箇所へ集約するため container を使用します。
           variant="container"
           loading={isLoading}
           loadingText="読み込み中"
@@ -135,7 +135,7 @@ function RouteComponent() {
                   onClick={() =>
                     navigate({
                       to: '/reports/$date',
-                      // 既定は今日。日付は編集画面で変更できる。
+                      // 既定値は当日です。日付は編集画面で変更できます。
                       params: { date: new Date().toISOString().slice(0, 10) },
                     })
                   }
@@ -148,8 +148,8 @@ function RouteComponent() {
             </Header>
           }
           empty={
-            // 取得に失敗したときは Alert を出しているので、ここで
-            // 「まだありません」と重ねると未作成だと誤解させる。
+            // 取得失敗時は Alert を表示しているため、ここで「まだありません」と
+            // 重ねて表示すると、未作成であると誤解を招きます。
             error ? (
               <Box textAlign="center" padding="l" color="text-body-secondary">
                 日報を表示できませんでした
@@ -166,9 +166,9 @@ function RouteComponent() {
             )
           }
           pagination={
-            // ページ番号は出さない。カーソル方式では総件数が分からず、
-            // 訪問履歴を総ページ数として見せると、削除で件数が減った
-            // あとも実体のないページが残ってしまう。
+            // ページ番号は表示しません。カーソル方式では総件数を取得できず、
+            // 訪問履歴を総ページ数として扱うと、削除により件数が減った後も
+            // 存在しないページが残ってしまうためです。
             hasPrevious || hasNext ? (
               <SpaceBetween direction="horizontal" size="xs">
                 <Button

@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { isValidDateString } from './date';
 
 /**
- * サーバー側 DateSchema と同じ条件を保つためのテスト。
- * packages/api/src/schema/daily-report.spec.ts と同じ境界を並べている。
+ * サーバー側 DateSchema と同一の判定条件を保つためのテスト。
+ * packages/api/src/schema/daily-report.spec.ts と同じ境界値を並べ、
+ * 片方だけ変更された場合に検知できるようにする。
  */
 describe('isValidDateString', () => {
   it.each(['2026-09-13', '2000-01-01', '2024-02-29'])('accepts %s', (v) => {
@@ -28,7 +29,8 @@ describe('isValidDateString', () => {
     },
   );
 
-  // Date.parse は日の溢れを翌月へロールオーバーして受理してしまう。
+  // Date.parse は日の超過を翌月にロールオーバーして受理してしまうため（例: 2026-02-30 -> 2026-03-02）、
+  // 正規化後の値と入力値が一致するかを検査していることを確認する。
   it.each(['2026-02-30', '2025-02-29', '2026-04-31', '2026-06-31'])(
     'rejects %s, which would roll over',
     (v) => {
