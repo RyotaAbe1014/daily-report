@@ -20,12 +20,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useApi } from '../../hooks/useApi';
+import { isValidDateString } from '../../lib/date';
+import { toErrorMessage } from '../../lib/errorMessage';
 
 export const Route = createFileRoute('/reports/$date')({
   component: RouteComponent,
 });
 
-/** サーバー側 SectionSchema と同等の上限値。バリデーションエラーを防ぐため保存前にチェックします。 */
+/** サーバー側 SectionSchema と同等の上限値。保存前にチェックし、超過時は送信しません。 */
 const MAX_SECTIONS = 20;
 const HEADING_MAX = 200;
 const BODY_MAX = 100_000;
@@ -40,21 +42,31 @@ function RouteComponent() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  /*
+   * URL の日付はユーザーが直接書き換えられます。実在しない日付のまま
+   * 処理を進めると DatePicker が近い日付へ丸めてしまい、ユーザーが
+   * 指定していない日に書き込まれる恐れがあります。
+   * そのため、サーバーと同一の条件で事前に弾きます。
+   */
+  const isValidDate = isValidDateString(routeDate);
+
   const [date, setDate] = useState(routeDate);
   const [sections, setSections] = useState<Section[]>([emptySection()]);
   const [notifications, setNotifications] = useState<FlashbarProps['items']>(
     [],
   );
 
-  // 編集対象のデータ取得には URL パラメータの日付（routeDate）を使用します。
-  // フォーム内の日付入力を変更しても取得先は変えず、「保存先の日付を変更する」操作として扱います。
-  const { data, isLoading, error } = useQuery(
-    api.dailyReport.get.queryOptions({ date: routeDate }),
-  );
+  // 編集対象のデータ取得には URL パラメータの日付を使用します。
+  // フォーム内の日付を変更しても取得先は変えず、「保存先の日付を変更する」操作として扱います。
+  const { data, isLoading, error } = useQuery({
+    ...api.dailyReport.get.queryOptions({ date: routeDate }),
+    // 事前に弾いた日付で問い合わせても 400 が返るだけのため、リクエストを送りません。
+    enabled: isValidDate,
+  });
 
   const existing = data?.report ?? null;
 
-  // 取得完了時、既存の日報データをフォームの入力状態に反映します。
+  // 取得完了時、既存の日報データをフォームの入力状態へ反映します。
   useEffect(() => {
     if (existing) {
       setSections(existing.sections.map((s) => ({ ...s })));
@@ -84,7 +96,8 @@ function RouteComponent() {
       invalidate();
       navigate({ to: '/reports' });
     },
-    onError: (e) => notifyError('作成できませんでした', e.message),
+    onError: (e) =>
+      notifyError('作成できませんでした', toErrorMessage(e, 'create')),
   });
 
   const updateReport = useMutation({
@@ -93,7 +106,8 @@ function RouteComponent() {
       invalidate();
       navigate({ to: '/reports' });
     },
-    onError: (e) => notifyError('更新できませんでした', e.message),
+    onError: (e) =>
+      notifyError('更新できませんでした', toErrorMessage(e, 'update')),
   });
 
   const deleteReport = useMutation({
@@ -102,13 +116,14 @@ function RouteComponent() {
       invalidate();
       navigate({ to: '/reports' });
     },
-    onError: (e) => notifyError('削除できませんでした', e.message),
+    onError: (e) =>
+      notifyError('削除できませんでした', toErrorMessage(e, 'delete')),
   });
 
   const isSaving =
     createReport.isPending || updateReport.isPending || deleteReport.isPending;
 
-  /** 入力内容が保存可能な状態かを判定します。サーバー側スキーマと同じバリデーション条件を適用しています。 */
+  /** 入力内容が保存可能な状態かを判定します。サーバー側スキーマと同じ条件を適用しています。 */
   const validationMessage = (() => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return '日付を選んでください。';
@@ -134,13 +149,31 @@ function RouteComponent() {
       return;
     }
     const input = { date, sections };
-    // 取得元と同じ日付であれば更新（update）、別の日付または新規作成時は作成（create）を実行します。
+    // 取得元と同じ日付に既存データがあれば更新（update）、それ以外は作成（create）を実行します。
     if (existing && date === routeDate) {
       updateReport.mutate(input);
     } else {
       createReport.mutate(input);
     }
   };
+
+  if (!isValidDate) {
+    return (
+      <ContentLayout header={<Header variant="h1">日報を開けません</Header>}>
+        <Alert
+          type="error"
+          header="日付が正しくありません"
+          action={
+            <Button onClick={() => navigate({ to: '/reports' })}>
+              一覧へ戻る
+            </Button>
+          }
+        >
+          「{routeDate}」は日付として扱えません。一覧から選び直してください。
+        </Alert>
+      </ContentLayout>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -178,7 +211,7 @@ function RouteComponent() {
     >
       {error ? (
         <Alert type="error" header="日報を取得できませんでした">
-          {error.message}
+          {toErrorMessage(error, 'load')}
         </Alert>
       ) : null}
 

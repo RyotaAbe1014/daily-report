@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Header,
-  Pagination,
   SpaceBetween,
   Table,
 } from '@cloudscape-design/components';
@@ -11,12 +10,13 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useApi } from '../../hooks/useApi';
+import { toErrorMessage } from '../../lib/errorMessage';
 
 export const Route = createFileRoute('/reports/')({
   component: RouteComponent,
 });
 
-/** 1 ページあたりの表示件数。サーバー側のデフォルトは 31 件ですが、一覧画面では見やすさのため 10 件に設定しています。 */
+/** 1 ページあたりの表示件数。サーバー側の既定値は 31 ですが、一覧画面では短めに設定します。 */
 const PAGE_SIZE = 10;
 
 function RouteComponent() {
@@ -26,6 +26,10 @@ function RouteComponent() {
   /**
    * サーバーから返却されるページネーション用カーソル文字列の履歴。
    * 前のページへ戻れるよう、通過したカーソルを配列で保持します（先頭ページは undefined）。
+   *
+   * この履歴はあくまで「どこまで進んだか」を表すもので、総ページ数ではありません。
+   * カーソル方式では全体の件数を取得できないため、ページ数は表示せず、
+   * 前後へ移動できるかどうかのみを提示します。
    */
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [pageIndex, setPageIndex] = useState(0);
@@ -41,33 +45,50 @@ function RouteComponent() {
   const reports = data?.reports ?? [];
   const nextCursor = data?.cursor ?? null;
 
-  /** 次ページが存在する場合、その分のページ番号を含めて表示件数を計算します。 */
-  const pagesCount = cursors.length + (nextCursor ? 1 : 0);
+  const hasPrevious = pageIndex > 0;
+  const hasNext = nextCursor !== null;
 
-  const goToPage = (nextPageIndex: number) => {
-    // 初めて訪れる次ページへ遷移する場合のみ、新しいカーソルを履歴に追加します。
-    if (nextPageIndex === cursors.length && nextCursor) {
+  const goToNextPage = () => {
+    if (!nextCursor) {
+      return;
+    }
+    // 初めて訪れるページへ遷移する場合のみ、新しいカーソルを履歴に追加します。
+    // 戻ってから進み直した場合は既に保持済みのため、履歴は変更しません。
+    if (pageIndex + 1 === cursors.length) {
       setCursors([...cursors, nextCursor]);
     }
-    setPageIndex(nextPageIndex);
+    setPageIndex(pageIndex + 1);
+  };
+
+  const goToPreviousPage = () => {
+    if (!hasPrevious) {
+      return;
+    }
+    /*
+     * 進んだ先の履歴は破棄します。保持しても再利用の余地がないうえ、
+     * 削除などで件数が減った後は存在しない位置を指し続けてしまうためです。
+     * 進み直す際は、その時点のレスポンスから改めてカーソルを取得します。
+     */
+    setCursors(cursors.slice(0, pageIndex));
+    setPageIndex(pageIndex - 1);
   };
 
   return (
     <SpaceBetween size="l">
       {error ? (
         <Alert type="error" header="日報を取得できませんでした">
-          {error.message}
+          {toErrorMessage(error, 'load')}
         </Alert>
       ) : null}
 
       {/*
-        Table はデフォルトで行幅が親コンテナいっぱいまで広がり、日付列の左端が
-        ヘッダーからはみ出るため、styles.css でマージンを調整して列の開始位置を揃えています。
+        Table は行を親の左右いっぱいに広げるため、そのままだと日付の左端が
+        ヘッダーより外側に出る。styles.css で内側に寄せて列を揃える。
       */}
       <div className="table-aligned-with-header">
         <Table
-          // variant="full-page" にするとモバイル表示時に上下両方へページネーションが表示されてしまうため、
-          // 上部のみに絞る目的で "container" を指定しています。
+          // variant="full-page" はモバイル幅の場合、ヘッダーとフッターの双方に
+          // ページネーションを複製します。操作を上部の 1 箇所へ集約するため container を使用します。
           variant="container"
           loading={isLoading}
           loadingText="読み込み中"
@@ -114,7 +135,7 @@ function RouteComponent() {
                   onClick={() =>
                     navigate({
                       to: '/reports/$date',
-                      // デフォルトは今日の日付。実際の日付は遷移後の編集画面でも変更可能です。
+                      // 既定値は当日です。日付は編集画面で変更できます。
                       params: { date: new Date().toISOString().slice(0, 10) },
                     })
                   }
@@ -127,8 +148,8 @@ function RouteComponent() {
             </Header>
           }
           empty={
-            // 取得エラー時は上部に Alert を表示しているため、
-            // ここで「まだ日報がありません」と表示すると未作成と誤認されるのを防ぐ
+            // 取得失敗時は Alert を表示しているため、ここで「まだありません」と
+            // 重ねて表示すると、未作成であると誤解を招きます。
             error ? (
               <Box textAlign="center" padding="l" color="text-body-secondary">
                 日報を表示できませんでした
@@ -145,12 +166,25 @@ function RouteComponent() {
             )
           }
           pagination={
-            <Pagination
-              currentPageIndex={pageIndex + 1}
-              pagesCount={pagesCount}
-              openEnd={nextCursor !== null}
-              onChange={({ detail }) => goToPage(detail.currentPageIndex - 1)}
-            />
+            // ページ番号は表示しません。カーソル方式では総件数を取得できず、
+            // 訪問履歴を総ページ数として扱うと、削除により件数が減った後も
+            // 存在しないページが残ってしまうためです。
+            hasPrevious || hasNext ? (
+              <SpaceBetween direction="horizontal" size="xs">
+                <Button
+                  iconName="angle-left"
+                  ariaLabel="前のページ"
+                  disabled={!hasPrevious || isLoading}
+                  onClick={goToPreviousPage}
+                />
+                <Button
+                  iconName="angle-right"
+                  ariaLabel="次のページ"
+                  disabled={!hasNext || isLoading}
+                  onClick={goToNextPage}
+                />
+              </SpaceBetween>
+            ) : undefined
           }
         />
       </div>

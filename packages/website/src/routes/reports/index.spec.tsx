@@ -6,10 +6,10 @@ import { Route } from './index';
 /**
  * 一覧画面のテスト。
  *
- * 主な検証項目は「カーソルを用いたページネーションの履歴管理」と「行から編集画面への日付パラメータの引き渡し」。
- * カーソルはサーバーから返却される不透明な文字列であり、前後のページを行き来するために
- * これまでに通過したカーソルを配列で保持している。ここが正しく動作しないとページ移動がループしたり
- * 次ページに進めなくなったりするため、API呼び出し時に渡される引数の内容まで検証する。
+ * 関心はカーソルページングの積み方と、行から編集画面へ渡す日付。
+ * カーソルはサーバーが返す不透明な文字列で、前ページへ戻るために
+ * 通過したものを積んでいる。ここが崩れると同じページを往復したり
+ * 進めなくなったりするので、入力に何が渡るかまで見る。
  */
 
 const ListComponent = Route.options.component as () => React.ReactNode;
@@ -31,7 +31,7 @@ const report = (date: string, sections = 1) => ({
   updatedAt: '2026-09-13T09:30:00.000Z',
 });
 
-/** テーブルの行構造の変更に影響されないよう、日付テキストを手がかりに行要素（<tr>）を取得する。 */
+/** 行を日付で引く。テーブルの行構造に依存させない。 */
 const rowFor = async (date: string) => {
   const cell = await screen.findByText(date);
   const row = cell.closest('tr');
@@ -93,7 +93,7 @@ describe('一覧', () => {
     });
 
     expect(await screen.findByText('日報を取得できませんでした')).toBeDefined();
-    // エラー発生時に「データが0件（空）」と誤認して表示が混同されていないかを検証する。
+    // 失敗を空と取り違えさせない。
     expect(screen.queryByText('まだ日報がありません')).toBe(null);
   });
 
@@ -145,7 +145,7 @@ describe('一覧', () => {
   });
 
   describe('ページング', () => {
-    /** ページごとのモック応答を順次返すハンドラ。呼び出し時の引数は calls 配列に記録する。 */
+    /** ページごとの応答を順に返す。呼ばれた入力は calls に残す。 */
     const pagedHandler = (
       pages: { reports: unknown[]; cursor: string | null }[],
     ) => {
@@ -153,7 +153,7 @@ describe('一覧', () => {
       const handler = (input: unknown) => {
         const typed = input as { cursor?: string | null };
         calls.push(typed);
-        // 渡されたカーソルの値に基づいて何ページ目のデータを返すか決定する。
+        // カーソルの値で何ページ目かを決める。
         const index = typed.cursor
           ? pages.findIndex((p) => p.cursor === typed.cursor) + 1
           : 0;
@@ -170,10 +170,10 @@ describe('一覧', () => {
       renderList({ 'dailyReport.list': handler });
 
       await screen.findByText('2026-09-13');
-      // 初回リクエスト時はカーソルなし（undefined）で取得する。
+      // 初回はカーソルなし。
       expect(calls[0]?.cursor).toBeUndefined();
 
-      fireEvent.click(screen.getByRole('button', { name: '2' }));
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
 
       await screen.findByText('2026-09-12');
       expect(calls.at(-1)?.cursor).toBe('cursor-1');
@@ -187,32 +187,17 @@ describe('一覧', () => {
       renderList({ 'dailyReport.list': handler });
 
       await screen.findByText('2026-09-13');
-      fireEvent.click(screen.getByRole('button', { name: '2' }));
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
       await screen.findByText('2026-09-12');
 
-      fireEvent.click(screen.getByRole('button', { name: '1' }));
+      fireEvent.click(screen.getByRole('button', { name: '前のページ' }));
 
       await screen.findByText('2026-09-13');
-      // 1ページ目に戻る際は、カーソルを指定せずに最初から再取得する。
+      // 先頭ページはカーソルを付けずに引き直す。
       expect(calls.at(-1)?.cursor).toBeUndefined();
     });
 
-    // 次ページの有無はページ番号ボタンの表示有無に反映される。
-    // cursor が null の場合は現在のページ番号までのみを表示する。
-    it('最後のページでは次のページ番号を出さない', async () => {
-      renderList({
-        'dailyReport.list': () => ({
-          reports: [report('2026-09-13')],
-          cursor: null,
-        }),
-      });
-
-      await screen.findByText('2026-09-13');
-      expect(screen.getByRole('button', { name: '1' })).toBeDefined();
-      expect(screen.queryByRole('button', { name: '2' })).toBe(null);
-    });
-
-    it('次ページがあるうちは次のページ番号を出す', async () => {
+    it('先頭ページでは前へ戻れない', async () => {
       renderList({
         'dailyReport.list': () => ({
           reports: [report('2026-09-13')],
@@ -221,7 +206,142 @@ describe('一覧', () => {
       });
 
       await screen.findByText('2026-09-13');
-      expect(await screen.findByRole('button', { name: '2' })).toBeDefined();
+      expect(
+        (
+          screen.getByRole('button', {
+            name: '前のページ',
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+    });
+
+    it('最後のページでは次へ進めない', async () => {
+      const { handler } = pagedHandler([
+        { reports: [report('2026-09-13')], cursor: 'cursor-1' },
+        { reports: [report('2026-09-12')], cursor: null },
+      ]);
+      renderList({ 'dailyReport.list': handler });
+
+      await screen.findByText('2026-09-13');
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+      await screen.findByText('2026-09-12');
+
+      expect(
+        (
+          screen.getByRole('button', {
+            name: '次のページ',
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+    });
+
+    it('次ページがあるうちは次へ進める', async () => {
+      renderList({
+        'dailyReport.list': () => ({
+          reports: [report('2026-09-13')],
+          cursor: 'cursor-1',
+        }),
+      });
+
+      await screen.findByText('2026-09-13');
+      expect(
+        (
+          screen.getByRole('button', {
+            name: '次のページ',
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false);
+    });
+
+    // 1 ページに収まるなら移動する余地がないので操作自体を出さない。
+    it('1 ページに収まるときは移動の操作を出さない', async () => {
+      renderList({
+        'dailyReport.list': () => ({
+          reports: [report('2026-09-13')],
+          cursor: null,
+        }),
+      });
+
+      await screen.findByText('2026-09-13');
+      expect(screen.queryByRole('button', { name: '前のページ' })).toBe(null);
+    });
+
+    /*
+     * 戻ったあとに進み直すときは、その時点の応答が返したカーソルを
+     * 使う。古いカーソルを使い回すと、間の項目が消えていた場合に
+     * 実体のない位置を指してしまう。
+     */
+    it('戻ってから進み直すとカーソルを取り直す', async () => {
+      const calls: (string | null | undefined)[] = [];
+      let cursorForPage2 = 'cursor-old';
+      const handler = (input: unknown) => {
+        const { cursor } = input as { cursor?: string | null };
+        calls.push(cursor);
+        if (!cursor) {
+          return { reports: [report('2026-09-13')], cursor: cursorForPage2 };
+        }
+        return { reports: [report('2026-09-12')], cursor: null };
+      };
+      const { queryClient } = renderList({ 'dailyReport.list': handler });
+
+      await screen.findByText('2026-09-13');
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+      await screen.findByText('2026-09-12');
+      expect(calls.at(-1)).toBe('cursor-old');
+
+      fireEvent.click(screen.getByRole('button', { name: '前のページ' }));
+      await screen.findByText('2026-09-13');
+
+      // 間の項目が消え、先頭ページが返す次のカーソルが変わった状況。
+      cursorForPage2 = 'cursor-new';
+      await queryClient.invalidateQueries();
+      await waitFor(() => expect(calls.at(-1)).toBeUndefined());
+
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+
+      // 古い cursor-old ではなく、引き直した cursor-new を使う。
+      await waitFor(() => expect(calls.at(-1)).toBe('cursor-new'));
+    });
+
+    /*
+     * 実際に起きた不具合の再現。2 ページ目の最後の 1 件を消すと全体が
+     * 1 ページに収まるのに、訪問履歴を総ページ数として使っていたため
+     * 実体のないページへ進めてしまい、そこで「まだ日報がありません」と
+     * 表示されていた。
+     */
+    it('件数が減って 1 ページに収まったら次へ進めない', async () => {
+      let total = 11;
+      const handler = (input: unknown) => {
+        const { cursor } = input as { cursor?: string | null };
+        // 先頭ページは 10 件。11 件目があるときだけ次のカーソルを返す。
+        if (!cursor) {
+          return {
+            reports: Array.from({ length: Math.min(total, 10) }, (_, i) =>
+              report(`2026-09-${String(13 - i).padStart(2, '0')}`),
+            ),
+            cursor: total > 10 ? 'cursor-1' : null,
+          };
+        }
+        return { reports: [report('2026-09-02')], cursor: null };
+      };
+
+      const { queryClient } = renderList({ 'dailyReport.list': handler });
+
+      await screen.findByText('2026-09-13');
+      fireEvent.click(screen.getByRole('button', { name: '次のページ' }));
+      await screen.findByText('2026-09-02');
+
+      // 2 ページ目の 1 件が消え、全体が 1 ページに収まる状況にする。
+      total = 10;
+      fireEvent.click(screen.getByRole('button', { name: '前のページ' }));
+      await screen.findByText('2026-09-13');
+      await queryClient.invalidateQueries();
+
+      // 1 ページに収まったので移動の操作ごと消える。修正前はここに
+      // 実体のない 2 ページ目が残っていた。
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: '次のページ' })).toBe(null),
+      );
     });
   });
 });
