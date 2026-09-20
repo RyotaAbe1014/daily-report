@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createAuthPlugin, LOCAL_DEV_USER_ID } from './auth.js';
 
 /**
- * 認証プラグインだけを載せた最小のルーター。
- * 解決した userId をそのまま返すので、プラグインの出力を直接検査できる。
+ * 認証プラグインのみを適用したテスト用の最小ルーター。
+ * 解決された userId をそのまま返却するため、認証プラグインの出力結果を直接テストできます。
  */
 const callWithEvent = async (event: unknown) => {
   const t = initTRPC.context<Record<string, unknown>>().create();
@@ -18,7 +18,7 @@ const callWithEvent = async (event: unknown) => {
   return caller.createCaller({ event } as never).whoami();
 };
 
-/** claims から組み立てた APIGatewayProxyEvent 相当の最小オブジェクト。 */
+/** 指定した claims を含む、APIGatewayProxyEvent 相当のテスト用最小オブジェクトを作成します。 */
 const eventWithClaims = (claims: unknown) =>
   ({
     requestContext: { authorizer: { claims } },
@@ -53,7 +53,7 @@ describe('createAuthPlugin', () => {
       ).resolves.toBe('user-abc');
     });
 
-    // 経路によっては claims が JSON 文字列で載るため両方を許容している。
+    // 連携経路や環境によって claims が JSON 文字列として渡されるケースがあるため、両方の形式に対応していることを検証する。
     it('takes the sub claim when claims arrive as a JSON string', async () => {
       await expect(
         callWithEvent(eventWithClaims(JSON.stringify({ sub: 'user-xyz' }))),
@@ -74,7 +74,7 @@ describe('createAuthPlugin', () => {
   });
 
   describe('fails closed', () => {
-    // 本番でオーソライザーの設定が外れた場合に素通りさせないための既定値。
+    // 本番環境でオーソライザーの設定ミス等が発生した場合でも、不正アクセスを素通りさせないためのフェイルクローズ動作を検証する。
     it('rejects when LOCAL_DEV is unset and there are no claims', async () => {
       await expectUnauthorized({});
     });
@@ -99,8 +99,8 @@ describe('createAuthPlugin', () => {
       await expectUnauthorized(eventWithClaims({ sub: 12345 }));
     });
 
-    // LOCAL_DEV は 'true' との完全一致でのみ有効。
-    // '1' や 'false' で固定ユーザーに落ちてはいけない。
+    // LOCAL_DEV は文字列 'true' と完全一致する場合のみ有効とする。
+    // '1' や大文字 'TRUE'、'false' などで誤ってローカル用固定ユーザーにフォールバックしないことを検証する。
     it.each(['1', 'false', 'TRUE', ''])(
       'rejects when LOCAL_DEV is %o rather than the exact string true',
       async (value) => {
@@ -116,8 +116,8 @@ describe('createAuthPlugin', () => {
       await expect(callWithEvent({})).resolves.toBe(LOCAL_DEV_USER_ID);
     });
 
-    // ローカルでは API Gateway を経由しないので、
-    // たまたまクレームが載っていても固定ユーザーを優先する。
+    // ローカル開発環境では API Gateway を経由しない前提のため、
+    // 仮にイベント内にクレームが含まれていた場合でもローカル固定ユーザーを優先して適用する。
     it('prefers the fixed user over any claims present', async () => {
       process.env.LOCAL_DEV = 'true';
       await expect(

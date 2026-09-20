@@ -1,9 +1,9 @@
 /**
  * 日報エンティティの統合テスト。
  *
- * ローカルの DynamoDB (Docker) に対して実際に読み書きする。
- * `nx run @daily-report/db:test-integration` で実行する。単体テストの
- * ターゲットには含めていないので、Docker がない環境では走らない。
+ * ローカルで起動した DynamoDB Local (Docker) に対して実際の読み書きを検証します。
+ * 実行コマンド: `nx run @daily-report/db:test-integration`
+ * ※ 通常の単体テストからは除外されているため、Docker が起動していない環境では実行されません。
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -11,16 +11,16 @@ import {
   type DailyReportEntity,
 } from './daily-report.js';
 
-// client.ts はこの値でローカルのエンドポイントとテーブル名を解決する。
+// client.ts がローカルのエンドポイント（http://localhost:<port>）およびテーブル名を参照するために必要。
 process.env.LOCAL_DEV = 'true';
 
-/** 他のテストと衝突しないよう、テストごとにユーザー ID を分ける。 */
+/** 他のテストケースやプロセスとデータが衝突しないよう、テストごとに一意なユーザー ID を生成する。 */
 const userFor = (name: string) => `test-${name}-${process.pid}`;
 
 let entity: DailyReportEntity;
 const touched: { userId: string; date: string }[] = [];
 
-/** 後始末の対象として記録しつつ作成する。 */
+/** テスト終了後に後始末（delete）できるよう作成履歴に記録しつつ、日報を作成する。 */
 const create = async (
   userId: string,
   date: string,
@@ -100,7 +100,7 @@ describe('createDailyReportEntity', () => {
         { heading: '更新前', body: 'a' },
       ]);
 
-      // updatedAt は ISO 文字列なので、同一ミリ秒だと差が出ない。
+      // updatedAt は ISO 8601 文字列のため、更新前後の時刻差を確実に発生させる目的で微小待機する。
       await new Promise((resolve) => setTimeout(resolve, 5));
 
       const patched = await entity
@@ -139,7 +139,7 @@ describe('createDailyReportEntity', () => {
       expect(fetched.data).toBeNull();
     });
 
-    // プロシージャ層が削除を冪等として扱えるのは、この挙動が前提。
+    // 存在しない項目の削除でも例外にならず成功する挙動は、プロシージャ層が削除操作を冪等（idempotent）に保つ前提となっている。
     it('succeeds for a date that does not exist', async () => {
       await expect(
         entity
@@ -226,8 +226,8 @@ describe('createDailyReportEntity', () => {
     });
   });
 
-  // キー設計そのものの検証。pk がユーザー単位なので、
-  // 他人の項目にはキーを組み立てても到達できない。
+  // パーティションキー（pk）がユーザー単位で分離されている設計の検証。
+  // 他人のユーザー ID の項目には、同一日付であってもアクセスできないことを保証する。
   describe('isolation between users', () => {
     const alice = userFor('alice');
     const bob = userFor('bob');

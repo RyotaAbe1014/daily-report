@@ -6,18 +6,20 @@ import { Route } from './index';
 /**
  * ホーム画面のテスト。
  *
- * 画面の関心は 3 つ。今日の日付で get を引くこと、その結果で導線の文言を
- * 変えること、そして結果が確定するまで日報の有無を断定しないこと。
+ * 主な検証項目は以下の 3 点：
+ * 1. 今日の日付で日報取得 API を呼び出していること
+ * 2. 取得結果の有無に応じて導線ボタンの文言が切り替わること
+ * 3. 取得完了まで日報の有無を断定した表示を行わないこと
  */
 
 const HomeComponent = Route.options.component as () => React.ReactNode;
 
 /**
- * ボタンが押せる状態になるまで待ってから返す。
+ * ボタンがクリック可能（disabled 解除）になるまで待機して要素を返却するヘルパー関数。
  *
- * 取得中はプライマリ操作を無効にしているため、見つかった時点で
- * クリックしても何も起きない。有効化を待たずに押すとテストが
- * 実装ではなくタイミングに左右される。
+ * データ取得中は操作ミスを防ぐためメインボタンを無効化しています。
+ * 単に要素の出現を待つだけではクリックが無視される可能性があるため、
+ * タイミング依存によるテストの不安定さを防ぐ目的で disabled の解除まで明示的に待ちます。
  */
 const findEnabledButton = async (name: string) => {
   const button = (await screen.findByRole('button', {
@@ -40,8 +42,8 @@ const reportWith = (sectionCount: number) => ({
 });
 
 beforeEach(() => {
-  // 「今日」を固定する。日中の時刻にしているのは、UTC 起因で日付が
-  // 前日にずれる問題（#5）をこのテストの対象から外すため。
+  // テスト実行時の「今日」の日付を固定します。
+  // UTC 変換によって日付が前日にずれる問題（#5）の影響をテスト対象から除外するため、日中の時刻（JST 12:00）に指定しています。
   vi.setSystemTime(new Date('2026-09-13T12:00:00+09:00'));
 });
 
@@ -55,7 +57,7 @@ describe('ホーム', () => {
     renderRoute(HomeComponent, { handlers: { 'dailyReport.get': get } });
 
     await waitFor(() => expect(get).toHaveBeenCalled());
-    // 入力は { date } のオブジェクト。日付は今日。
+    // API に渡された入力引数（今日の日付を持つ { date } オブジェクト）を検証する。
     const input = get.mock.calls[0]?.[0] as { date: string };
     expect(input.date).toBe('2026-09-13');
   });
@@ -129,8 +131,8 @@ describe('ホーム', () => {
   });
 
   /**
-   * 取得が終わるまで「まだ書かれていません」を出すと、実際には存在する
-   * 日報を未作成だと誤解させる。確定前に状態を断定しないことを固定する。
+   * データ取得完了前に「まだ書かれていません」を表示すると、実際には存在する日報を
+   * 未作成と誤認させる恐れがあるため、取得処理中の表示制御を検証する。
    */
   describe('取得中', () => {
     it('日報の有無を断定しない', async () => {
@@ -152,7 +154,7 @@ describe('ホーム', () => {
         handlers: { 'dailyReport.get': () => pending.promise },
       });
 
-      // 取得中はラベルが「書く」か「編集」か決まらないので無効。
+      // 取得処理中は「書く」「編集」のどちらを表示すべきか未確定のため、ボタンを無効化（disabled）とする。
       const button = (await screen.findByRole('button', {
         name: '今日の日報を書く',
       })) as HTMLButtonElement;
@@ -176,7 +178,7 @@ describe('ホーム', () => {
       handlers: { 'dailyReport.get': () => ({ report: null }) },
     });
 
-    // 一覧への導線は取得結果に依存しないので、無効化を待つ必要はない。
+    // 一覧画面への遷移ボタンは日報の取得結果に依存しないため、無効化を待たずに即座に押下可能。
     fireEvent.click(await screen.findByRole('button', { name: '一覧を見る' }));
 
     await waitFor(() =>

@@ -10,8 +10,8 @@ export default defineConfig(() => ({
     globals: true,
     environment: 'jsdom',
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    // 統合テストは DynamoDB Local (Docker) を必要とするため、
-    // 既定のターゲットからは外す。test-integration で明示的に走らせる。
+    // 統合テストには DynamoDB Local (Docker) が必要なため、
+    // 通常のテスト対象からは除外しています。実行時は test-integration ターゲットを指定してください。
     exclude: ['**/node_modules/**', '**/*.integration.spec.ts'],
     reporters: ['default'],
     coverage: {

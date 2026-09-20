@@ -1,14 +1,14 @@
 import { defineConfig } from 'vitest/config';
 
 /**
- * 統合テスト用の設定。DynamoDB Local (Docker) を必要とする。
- * `nx run @daily-report/api:test-integration` から使う。
+ * 統合テスト用の設定ファイルです。DynamoDB Local (Docker) の起動が必要です。
+ * 実行コマンド: `nx run @daily-report/api:test-integration`
  */
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/packages/api-integration',
-  // ワークスペース内のパッケージは package.json の exports ではなく
-  // tsconfig.base.json の paths で解決している。website と同じ設定。
+  // モノレポ内の他パッケージへの参照は、package.json の exports ではなく
+  // tsconfig.base.json の paths エイリアスで解決します（website パッケージと同様の構成）。
   resolve: { tsconfigPaths: true },
   test: {
     passWithNoTests: true,
@@ -17,11 +17,11 @@ export default defineConfig(() => ({
     globals: true,
     environment: 'node',
     include: ['{src,tests}/**/*.integration.spec.ts'],
-    // 同じテーブルの同じキーを触るため、ファイル間で並行させない。
+    // 同一テーブル内の同じキーを操作するテストが含まれるため、テストファイル間の並行実行を無効化しています。
     fileParallelism: false,
     reporters: ['default'],
-    // powertools の構造化ログとメトリクスが 1 リクエストごとに出るため、
-    // テスト結果が埋もれる。エラーを検証するテストも含むので黙らせる。
+    // 実行時に Powertools の構造化ログやメトリクスがリクエストごとに出力されてテスト結果が見づらくなるのを防ぐため、
+    // テスト実行中は出力を抑制（サイレント）に設定しています。
     env: {
       POWERTOOLS_LOG_LEVEL: 'SILENT',
       POWERTOOLS_METRICS_DISABLED: 'true',

@@ -4,9 +4,9 @@ import { appRouter } from './router.js';
 
 const PORT = 2022;
 
-// ローカルサーバーは API Gateway を経由しないため Cognito のクレームが存在しない。
-// 認証ミドルウェアに固定ユーザーを使わせるための明示的な指定。
-// 本番の Lambda ではこの変数を設定しないこと。
+// ローカルスタンドアロンサーバーは API Gateway を経由しないため、Cognito のクレーム情報が存在しません。
+// 認証ミドルウェアでローカル用のモックユーザー（固定ID）を使用させるために LOCAL_DEV を有効化しています。
+// ※ 本番環境の Lambda では絶対にこの環境変数を設定しないでください。
 process.env.LOCAL_DEV = 'true';
 
 createHTTPServer({

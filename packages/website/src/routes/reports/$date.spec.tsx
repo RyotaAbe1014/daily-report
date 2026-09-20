@@ -6,9 +6,9 @@ import { Route } from './$date';
 /**
  * 作成・編集画面のテスト。
  *
- * 同じ画面で作成と更新を兼ねるため、どちらの mutation を呼ぶかの分岐が
- * 最も壊れやすい。保存前の検証もサーバー側スキーマと条件を合わせている
- * ので、境界がずれないよう入力の中身まで見る。
+ * 同一画面で新規作成と更新の両方を処理するため、状況に応じてどちらの mutation を呼び出すかの
+ * 条件分岐を重点的に検証します。また、クライアント側の入力検証もサーバー側スキーマの条件と一致している必要があるため、
+ * 送信データの境界値を含めて詳細にテストします。
  */
 
 const EditComponent = Route.options.component as () => React.ReactNode;
@@ -41,7 +41,7 @@ const saved = (date = '2026-09-13') => ({
   updatedAt: '2026-09-13T10:00:00.000Z',
 });
 
-/** n 番目の見出し・本文に値を入れる。 */
+/** 指定したインデックスのセクションに見出しと本文を入力するヘルパー関数。 */
 const fillSection = (index: number, heading: string, body: string) => {
   const headings = screen.getAllByPlaceholderText('今日やったこと');
   const bodies = screen.getAllByPlaceholderText('- 日報 API を実装した');
@@ -132,7 +132,7 @@ describe('作成・編集', () => {
       expect(screen.getAllByPlaceholderText('今日やったこと')).toHaveLength(1);
     });
 
-    // 1 件は必須なので、最後の 1 件は消させない。
+    // セクションは最低 1 件必要なため、最後の 1 件は削除ボタンを表示させない。
     it('最後の 1 件は削除できない', async () => {
       renderEdit(handlers);
       await screen.findByText('日報を作成');
@@ -233,8 +233,9 @@ describe('作成・編集', () => {
   });
 
   /**
-   * サーバー側スキーマと同じ条件で弾く。往復を減らすためのもので、
-   * 最終的な防御はサーバー側にある。
+   * クライアント側バリデーションのテスト。
+   * 不要な通信往復を減らすための事前チェックであり、サーバー側スキーマと同じ検証ルールが適用されていることを確認する。
+   * （なお、最終的な整合性の担保はサーバー側で行われる）
    */
   describe('保存前の検証', () => {
     const setup = () => {
